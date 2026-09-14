@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { DEMO_STATES } from '../data/demoStates';
 import { DEMO_CITY_WEATHER } from '../data/demoWeather';
 import { StateRiskData } from '../types/location';
 import { WeatherTelemetry } from '../types/weather';
+import { WeatherService } from '../services/weatherService';
 
 interface LocationContextType {
   selectedCityKey: string;
@@ -13,6 +14,7 @@ interface LocationContextType {
   setSelectedStateById: (stateId: string) => void;
   resetToNational: () => void;
   isNationalOverview: boolean;
+  isLoadingWeather: boolean;
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
@@ -21,22 +23,55 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [selectedCityKey, setSelectedCityKey] = useState<string>('hyderabad');
   const [selectedStateId, setSelectedStateId] = useState<string | null>('TS');
   const [isNationalOverview, setIsNationalOverview] = useState<boolean>(false);
+  const [weather, setWeather] = useState<WeatherTelemetry>(
+    () => DEMO_CITY_WEATHER['hyderabad']
+  );
+  const [isLoadingWeather, setIsLoadingWeather] = useState<boolean>(false);
 
-  const weather = DEMO_CITY_WEATHER[selectedCityKey] || DEMO_CITY_WEATHER['hyderabad'];
   const selectedState = DEMO_STATES.find((s) => s.id === selectedStateId);
 
+  // Reactive live weather fetch whenever city changes
+  useEffect(() => {
+    let isMounted = true;
+    const loadWeather = async () => {
+      setIsLoadingWeather(true);
+      const initial = DEMO_CITY_WEATHER[selectedCityKey] || DEMO_CITY_WEATHER['hyderabad'];
+      setWeather(initial);
+
+      try {
+        const live = await WeatherService.fetchLiveCityWeather(selectedCityKey);
+        if (isMounted && live) {
+          setWeather(live);
+        }
+      } catch {
+        // keep fallback
+      } finally {
+        if (isMounted) setIsLoadingWeather(false);
+      }
+    };
+
+    loadWeather();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedCityKey]);
+
   const setSelectedCity = (cityKey: string) => {
-    setSelectedCityKey(cityKey);
+    const key = cityKey.toLowerCase();
+    setSelectedCityKey(key);
     setIsNationalOverview(false);
-    // Auto-map state if possible
-    if (cityKey === 'hyderabad') setSelectedStateId('TS');
-    else if (cityKey === 'delhi') setSelectedStateId('DL');
-    else if (cityKey === 'mumbai') setSelectedStateId('MH');
-    else if (cityKey === 'bhubaneswar') setSelectedStateId('OD');
-    else if (cityKey === 'guwahati') setSelectedStateId('AS');
-    else if (cityKey === 'kochi') setSelectedStateId('KL');
-    else if (cityKey === 'kolkata') setSelectedStateId('WB');
-    else if (cityKey === 'chennai') setSelectedStateId('TN');
+
+    // Auto-map state
+    if (key === 'hyderabad') setSelectedStateId('TS');
+    else if (key === 'delhi') setSelectedStateId('DL');
+    else if (key === 'mumbai') setSelectedStateId('MH');
+    else if (key === 'bhubaneswar') setSelectedStateId('OD');
+    else if (key === 'guwahati') setSelectedStateId('AS');
+    else if (key === 'kochi') setSelectedStateId('KL');
+    else if (key === 'kolkata') setSelectedStateId('WB');
+    else if (key === 'chennai') setSelectedStateId('TN');
+    else if (key === 'bengaluru') setSelectedStateId('KA');
+    else if (key === 'jaipur') setSelectedStateId('RJ');
   };
 
   const setSelectedStateById = (stateId: string) => {
@@ -46,7 +81,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (state) {
       const capitalKey = state.capital.split(' ')[0].toLowerCase();
       if (DEMO_CITY_WEATHER[capitalKey]) {
-        setSelectedCityKey(capitalKey);
+        setSelectedCity(capitalKey);
       }
     }
   };
@@ -67,6 +102,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSelectedStateById,
         resetToNational,
         isNationalOverview,
+        isLoadingWeather,
       }}
     >
       {children}
