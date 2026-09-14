@@ -1,6 +1,7 @@
+import { HazardItem, HazardCategory, HazardSeverity, HazardNature, HazardStatus } from '../types/hazard';
 import { DEMO_HAZARDS } from '../data/demoHazards';
 import { DEMO_STATES } from '../data/demoStates';
-import { HazardItem, HazardCategory, HazardSeverity, HazardNature, HazardStatus } from '../types/hazard';
+import { CITY_COORDINATES } from './weatherService';
 
 export interface HazardFilterOptions {
   searchQuery?: string;
@@ -14,8 +15,306 @@ export interface HazardFilterOptions {
 
 export class HazardService {
   private static hazards: HazardItem[] = [...DEMO_HAZARDS];
+  private static isInitialized = false;
+  private static listeners: Array<() => void> = [];
+
+  /**
+   * Initializes and polls authentic live natural hazards from USGS Seismology & Open-Meteo Real Data
+   */
+  public static async fetchLiveHazards(): Promise<HazardItem[]> {
+    try {
+      const liveList: HazardItem[] = [];
+
+      // 1. Fetch Real Live USGS Earthquakes (2.5+ Magnitude)
+      try {
+        const usgsRes = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson', {
+          headers: { Accept: 'application/json' },
+        });
+        if (usgsRes.ok) {
+          const usgsData = await usgsRes.json();
+          const features = usgsData.features || [];
+
+          for (const feat of features.slice(0, 15)) {
+            const coords = feat.geometry?.coordinates; // [lng, lat, depth]
+            if (!coords || coords.length < 2) continue;
+            const [lng, lat, depth] = coords;
+            const mag = feat.properties?.mag || 3.0;
+            const place = feat.properties?.place || 'Regional Epicenter';
+            const time = new Date(feat.properties?.time || Date.now());
+            const eventId = feat.id || `USGS-${Math.floor(Math.random() * 100000)}`;
+
+            // Determine if in or near South Asia / Indian Ocean / Indo-Eurasian plate
+            const isInIndianPlate = lat >= -10 && lat <= 40 && lng >= 55 && lng <= 105;
+
+            let severity: HazardSeverity = 'moderate';
+            if (mag >= 6.0) severity = 'critical';
+            else if (mag >= 4.5) severity = 'warning';
+            else if (mag < 3.5) severity = 'minor';
+
+            liveList.push({
+              id: `LIVE-EQ-${eventId}`,
+              title: `M${mag.toFixed(1)} Earthquake — ${place}`,
+              category: 'earthquake',
+              categoryName: 'Seismic Activity',
+              isHumanMade: false,
+              nature: 'incident',
+              severity,
+              status: 'monitoring',
+              headline: `USGS Seismological Station recorded a magnitude ${mag.toFixed(1)} seismic rupture at a depth of ${depth || 10}km.`,
+              description: `Real-time seismic wave detection confirmed by the USGS Global Seismographic Network. Epicenter coordinates: [${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E].`,
+              location: {
+                state: isInIndianPlate ? 'Indian Subcontinent & Ocean Region' : 'Global Seismic Belt',
+                district: place,
+                city: place.split(' of ').pop() || place,
+                coordinates: [lat, lng],
+                radiusKm: Math.round(mag * 30),
+                affectedZones: [place, `Depth ${depth || 10}km Epicentral Zone`],
+              },
+              source: {
+                agency: 'USGS National Earthquake Information Center',
+                bulletinId: `USGS-SEIS-${eventId.toUpperCase()}`,
+                publishedAt: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' UTC',
+                validUntil: 'Post-Event Seismic Relaxation (24h)',
+              },
+              metrics: {
+                intensity: `Richter Scale M${mag.toFixed(1)}`,
+                magnitudeRichter: Number(mag.toFixed(1)),
+              },
+              timeline: [
+                {
+                  time: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  stage: 'Incident Reported',
+                  description: `Primary P-waves and S-waves registered at automated seismic stations. Magnitude calculated at M${mag.toFixed(1)}.`,
+                  source: 'USGS Global Network',
+                },
+                {
+                  time: 'Live',
+                  stage: 'Response Deployed',
+                  description: 'Aftershock surveillance active across regional tectonic fracture zones.',
+                  source: 'AEGIS Seismic Sentinel',
+                },
+              ],
+              safetyAdvice: [
+                {
+                  title: 'Drop, Cover, and Hold On',
+                  instruction: 'If shaking is felt, take shelter under sturdy furniture immediately.',
+                  urgent: true,
+                },
+                {
+                  title: 'Inspect Structural Cracks',
+                  instruction: 'Avoid unreinforced masonry structures and check gas lines.',
+                  urgent: false,
+                },
+              ],
+              emergencyContacts: [
+                { name: 'National Emergency Helpline', phone: '112' },
+                { name: 'NDRF Seismological Control', phone: '1078' },
+              ],
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[HazardService] USGS Earthquake feed error:', err);
+      }
+
+      // 2. Fetch Live Open-Meteo Meteorological Hazards across Key Indian Metros
+      try {
+        const cities = Object.keys(CITY_COORDINATES);
+        for (const cKey of cities) {
+          const cfg = CITY_COORDINATES[cKey];
+          const mUrl = `https://api.open-meteo.com/v1/forecast?latitude=${cfg.lat}&longitude=${cfg.lng}&current=temperature_2m,precipitation,wind_speed_10m,wind_gusts_10m,weather_code&timezone=Asia%2FKolkata`;
+          const res = await fetch(mUrl, { headers: { Accept: 'application/json' } });
+          if (!res.ok) continue;
+
+          const data = await res.json();
+          const curr = data.current || {};
+          const temp = Math.round(curr.temperature_2m || 30);
+          const wind = Math.round(curr.wind_speed_10m || 10);
+          const gust = Math.round(curr.wind_gusts_10m || wind * 1.3);
+          const precip = Number(curr.precipitation || 0);
+
+          // Heatwave Hazard
+          if (temp >= 38) {
+            liveList.push({
+              id: `LIVE-HEAT-${cKey.toUpperCase()}`,
+              title: `Severe Thermal Heatwave Alert — ${cfg.cityName}`,
+              category: 'heatwave',
+              categoryName: 'Heatwave & Extreme Temp',
+              isHumanMade: false,
+              nature: 'warning',
+              severity: temp >= 42 ? 'critical' : 'warning',
+              status: 'active',
+              headline: `Real-time surface temperature recorded at ${temp}°C in ${cfg.cityName}, ${cfg.stateName}.`,
+              description: `Severe atmospheric heat dome conditions detected. Elevated risk of thermal fatigue, heat cramps, and dehydration.`,
+              location: {
+                state: cfg.stateName,
+                district: cfg.cityName,
+                city: cfg.cityName,
+                coordinates: [cfg.lat, cfg.lng],
+                radiusKm: 45,
+                affectedZones: [cfg.cityName, 'Metropolitan Area', 'Urban Core'],
+              },
+              source: {
+                agency: 'Open-Meteo High-Resolution NWP',
+                bulletinId: `HEAT-${cKey.toUpperCase()}-${new Date().toISOString().slice(0, 10)}`,
+                publishedAt: 'Real-Time Telemetry Stream',
+                validUntil: 'Today, 18:00 IST',
+              },
+              metrics: {
+                intensity: `Ambient ${temp}°C`,
+                heatIndexCelsius: temp,
+                windSpeedKmph: wind,
+              },
+              timeline: [
+                {
+                  time: 'Live Stream',
+                  stage: 'Warning Upgraded',
+                  description: `Ground temperature sensors cross threshold at ${temp}°C.`,
+                  source: 'Meteorological Ingestion Pipeline',
+                },
+              ],
+              safetyAdvice: [
+                {
+                  title: 'Hydration & Sun Exposure Limit',
+                  instruction: 'Avoid direct sunlight between 11:00 AM and 4:00 PM. Drink plenty of water.',
+                  urgent: true,
+                },
+              ],
+              emergencyContacts: [
+                { name: 'State Heatwave Medical Helpline', phone: '108' },
+                { name: 'Disaster Management Cell', phone: '1070' },
+              ],
+            });
+          }
+
+          // Rainfall / Inundation Hazard
+          if (precip >= 10) {
+            liveList.push({
+              id: `LIVE-RAIN-${cKey.toUpperCase()}`,
+              title: `Heavy Inundation & Precipitation Watch — ${cfg.cityName}`,
+              category: 'flash_flood',
+              categoryName: 'Flash Flood & Inundation',
+              isHumanMade: false,
+              nature: 'warning',
+              severity: precip >= 30 ? 'critical' : 'warning',
+              status: 'active',
+              headline: `Active rainfall of ${precip}mm recorded over ${cfg.cityName}. Catchment overflow warning active.`,
+              description: `Convective cloud mass generating localized high-intensity precipitation. Urban lowlands and underpasses at risk of waterlogging.`,
+              location: {
+                state: cfg.stateName,
+                district: cfg.cityName,
+                city: cfg.cityName,
+                coordinates: [cfg.lat, cfg.lng],
+                radiusKm: 30,
+                affectedZones: [cfg.cityName, 'Low-lying Drainage Basins'],
+              },
+              source: {
+                agency: 'Open-Meteo Radar & Hydrology',
+                bulletinId: `HYDRO-${cKey.toUpperCase()}-${new Date().toISOString().slice(0, 10)}`,
+                publishedAt: 'Real-Time Stream',
+                validUntil: 'Next 6 Hours',
+              },
+              metrics: {
+                rainfallMm: precip,
+                windSpeedKmph: wind,
+              },
+              timeline: [
+                {
+                  time: 'Live Stream',
+                  stage: 'Warning Upgraded',
+                  description: `Precipitation rate of ${precip}mm registered by radar extrapolation.`,
+                  source: 'Hydro-Meteorological Pipeline',
+                },
+              ],
+              safetyAdvice: [
+                {
+                  title: 'Avoid Waterlogged Corridors',
+                  instruction: 'Do not attempt to drive through flooded underpasses or swift-moving water.',
+                  urgent: true,
+                },
+              ],
+              emergencyContacts: [
+                { name: 'Flood Rescue Control Room', phone: '1070' },
+                { name: 'NDRF Search & Rescue', phone: '1078' },
+              ],
+            });
+          }
+
+          // High Wind / Gale Warning
+          if (wind >= 35 || gust >= 50) {
+            liveList.push({
+              id: `LIVE-WIND-${cKey.toUpperCase()}`,
+              title: `High Wind Vectors & Gale Advisory — ${cfg.cityName}`,
+              category: 'cyclone',
+              categoryName: 'Cyclone & High Wind',
+              isHumanMade: false,
+              nature: 'warning',
+              severity: wind >= 50 ? 'critical' : 'warning',
+              status: 'active',
+              headline: `Sustained surface winds of ${wind} km/h with gusts of ${gust} km/h recorded in ${cfg.cityName}.`,
+              description: `Strong pressure gradient generating gale-force wind gusts. Structural loose objects and power lines require monitoring.`,
+              location: {
+                state: cfg.stateName,
+                district: cfg.cityName,
+                city: cfg.cityName,
+                coordinates: [cfg.lat, cfg.lng],
+                radiusKm: 50,
+                affectedZones: [cfg.cityName, 'Open Coastal / Elevated Zones'],
+              },
+              source: {
+                agency: 'Open-Meteo Real Data Feed',
+                bulletinId: `GALE-${cKey.toUpperCase()}-${new Date().toISOString().slice(0, 10)}`,
+                publishedAt: 'Live Stream',
+                validUntil: 'Next 8 Hours',
+              },
+              metrics: {
+                windSpeedKmph: wind,
+              },
+              timeline: [
+                {
+                  time: 'Live Stream',
+                  stage: 'Risk Detected',
+                  description: `Anemometers confirm wind gust spike to ${gust} km/h.`,
+                  source: 'Atmospheric Sensor Network',
+                },
+              ],
+              safetyAdvice: [
+                {
+                  title: 'Secure Loose Outdoor Structures',
+                  instruction: 'Fasten loose tin roofs, signs, and stay clear of tall trees.',
+                  urgent: false,
+                },
+              ],
+              emergencyContacts: [
+                { name: 'Cyclone Emergency Command', phone: '1070' },
+                { name: 'Emergency Police & Rescue', phone: '112' },
+              ],
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[HazardService] Weather hazard generation error:', err);
+      }
+
+      // If we obtained live real hazards, update the primary list with real events first
+      if (liveList.length > 0) {
+        const existingReal = this.hazards.filter((h) => !h.id.startsWith('LIVE-'));
+        this.hazards = [...liveList, ...existingReal];
+        this.notifyListeners();
+      }
+
+      this.isInitialized = true;
+      return this.hazards;
+    } catch (err) {
+      console.warn('[HazardService] Overall fetchLiveHazards failure:', err);
+      return this.hazards;
+    }
+  }
 
   public static getAllHazards(): HazardItem[] {
+    if (!this.isInitialized) {
+      this.fetchLiveHazards().catch(console.error);
+    }
     return [...this.hazards];
   }
 
@@ -87,5 +386,16 @@ export class HazardService {
       activeWarnings,
       activeForecasts,
     };
+  }
+
+  public static subscribe(listener: () => void): () => void {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== listener);
+    };
+  }
+
+  private static notifyListeners() {
+    this.listeners.forEach((l) => l());
   }
 }

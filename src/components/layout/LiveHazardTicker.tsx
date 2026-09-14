@@ -1,13 +1,27 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Radio, ShieldAlert, ChevronRight } from 'lucide-react';
-import { DEMO_HAZARDS } from '../../data/demoHazards';
+import { HazardService } from '../../services/hazardService';
+import { HazardItem } from '../../types/hazard';
 
 interface LiveHazardTickerProps {
   onSelectHazard?: (hazardId: string) => void;
 }
 
 export const LiveHazardTicker: React.FC<LiveHazardTickerProps> = ({ onSelectHazard }) => {
-  const activeBulletins = DEMO_HAZARDS.filter((h) => h.severity === 'critical' || h.severity === 'warning');
+  const [hazards, setHazards] = useState<HazardItem[]>(() => HazardService.getAllHazards());
+
+  useEffect(() => {
+    // Initial live fetch
+    HazardService.fetchLiveHazards().then(setHazards).catch(console.error);
+
+    // Subscribe to ongoing updates
+    const unsubscribe = HazardService.subscribe(() => {
+      setHazards(HazardService.getAllHazards());
+    });
+    return unsubscribe;
+  }, []);
+
+  const activeBulletins = hazards.filter((h) => h.severity === 'critical' || h.severity === 'warning');
 
   return (
     <div className="bg-[#0F172A] border-b border-charcoal-800 text-white text-xs font-mono py-1.5 px-3 flex items-center shadow-inner relative z-20">

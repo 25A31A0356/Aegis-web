@@ -40,8 +40,25 @@ export const HazardsPage: React.FC<HazardsPageProps> = ({
     }
   }, [initialCategory]);
 
-  const hazardsList = HazardService.filterHazards(filters);
-  const metrics = HazardService.getMetricsSummary();
+  const [hazardsList, setHazardsList] = useState<HazardItem[]>(() => HazardService.filterHazards(filters));
+  const [metrics, setMetrics] = useState(() => HazardService.getMetricsSummary());
+
+  useEffect(() => {
+    HazardService.fetchLiveHazards().then(() => {
+      setHazardsList(HazardService.filterHazards(filters));
+      setMetrics(HazardService.getMetricsSummary());
+    }).catch(console.error);
+
+    const unsubscribe = HazardService.subscribe(() => {
+      setHazardsList(HazardService.filterHazards(filters));
+      setMetrics(HazardService.getMetricsSummary());
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    setHazardsList(HazardService.filterHazards(filters));
+  }, [filters]);
 
   return (
     <div className="max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans">

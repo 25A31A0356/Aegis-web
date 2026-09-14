@@ -8,7 +8,7 @@ import { MapLayerControls } from '../components/map/MapLayerControls';
 import { MapLegend } from '../components/map/MapLegend';
 import { StateDetailDrawer } from '../components/map/StateDetailDrawer';
 import { HazardDetailModal } from '../components/hazards/HazardDetailModal';
-import { DEMO_HAZARDS } from '../data/demoHazards';
+import { HazardService } from '../services/hazardService';
 import { DEMO_STATES } from '../data/demoStates';
 import { DEMO_SHELTERS } from '../data/demoShelters';
 import { useLocation } from '../context/LocationContext';
@@ -31,8 +31,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const { selectedState, setSelectedStateById } = useLocation();
   const { beacons, activeRoute } = useSOS();
 
+  const [hazards, setHazards] = useState<HazardItem[]>(() => HazardService.getAllHazards());
   const [activeModalHazard, setActiveModalHazard] = useState<HazardItem | null>(null);
   const [activeDrawerState, setActiveDrawerState] = useState<StateRiskData | null>(null);
+
+  React.useEffect(() => {
+    HazardService.fetchLiveHazards().then(setHazards).catch(console.error);
+    const unsubscribe = HazardService.subscribe(() => {
+      setHazards(HazardService.getAllHazards());
+    });
+    return unsubscribe;
+  }, []);
 
   const [mapLayers, setMapLayers] = useState<MapLayersState>({
     weatherRadar: true,
@@ -47,7 +56,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   });
 
   const handleSelectHazard = (hazardId: string) => {
-    const hz = DEMO_HAZARDS.find((h) => h.id === hazardId);
+    const hz = HazardService.getHazardById(hazardId);
     if (hz) setActiveModalHazard(hz);
   };
 
@@ -85,7 +94,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           </div>
 
           <IndiaSafetyMap
-            hazards={DEMO_HAZARDS}
+            hazards={hazards}
             states={DEMO_STATES}
             sosBeacons={beacons}
             shelters={DEMO_SHELTERS}

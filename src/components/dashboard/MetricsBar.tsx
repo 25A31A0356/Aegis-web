@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertTriangle, ShieldAlert, Radio, PhoneCall, MapPin, Building2, Flame, Droplets, CheckCircle } from 'lucide-react';
-import { DEMO_HAZARDS } from '../../data/demoHazards';
+import { HazardService } from '../../services/hazardService';
 import { DEMO_STATES } from '../../data/demoStates';
 import { useSOS } from '../../context/SOSContext';
 
@@ -10,9 +10,22 @@ interface MetricsBarProps {
 
 export const MetricsBar: React.FC<MetricsBarProps> = ({ onNavigate }) => {
   const { beacons } = useSOS();
-  const criticalHazards = DEMO_HAZARDS.filter((h) => h.severity === 'critical').length;
-  const warningHazards = DEMO_HAZARDS.filter((h) => h.severity === 'warning').length;
-  const totalHazards = DEMO_HAZARDS.length;
+  const [metricsSummary, setMetricsSummary] = useState(() => HazardService.getMetricsSummary());
+
+  useEffect(() => {
+    HazardService.fetchLiveHazards().then(() => {
+      setMetricsSummary(HazardService.getMetricsSummary());
+    }).catch(console.error);
+
+    const unsubscribe = HazardService.subscribe(() => {
+      setMetricsSummary(HazardService.getMetricsSummary());
+    });
+    return unsubscribe;
+  }, []);
+
+  const criticalHazards = metricsSummary.criticalHazards;
+  const warningHazards = metricsSummary.warningHazards;
+  const totalHazards = metricsSummary.totalHazards;
   const criticalStates = DEMO_STATES.filter((s) => s.riskLevel === 'critical' || s.riskLevel === 'warning').length;
   const activeSOS = beacons.filter((b) => b.triageStatus !== 'resolved' && b.triageStatus !== 'cancelled').length;
 

@@ -12,8 +12,8 @@ export const ForecastsPage: React.FC = () => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
 
   const availableCities = WeatherService.getAvailableCities();
-  const hourlyData = WeatherService.getHourlyForecast();
-  const multiHazardRisks = WeatherService.getMultiHazardRiskIndex();
+  const hourlyData = WeatherService.getHourlyForecast(selectedCityKey);
+  const multiHazardRisks = WeatherService.getMultiHazardRiskIndex(selectedCityKey);
 
   const currentStep = TIMELINE_STEPS[currentStepIndex];
 
