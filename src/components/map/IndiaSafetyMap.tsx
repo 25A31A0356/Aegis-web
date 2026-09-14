@@ -17,23 +17,45 @@ import {
   Info,
   Layers,
   ChevronRight,
+  Crosshair,
+  Map as MapIcon,
 } from 'lucide-react';
 
-// Fix Leaflet Default Icon issue in bundled React apps
-const createSvgIcon = (color: string, label: string, isPulsing: boolean = false) => {
+// Google Maps Style Teardrop Pin Marker
+const createGooglePinIcon = (color: string, label: string, isPulsing: boolean = false) => {
   return L.divIcon({
-    className: 'custom-leaflet-marker',
+    className: 'google-maps-pin',
+    html: `
+      <div class="relative flex flex-col items-center justify-center -translate-y-3 cursor-pointer group">
+        ${isPulsing ? `<div class="absolute -top-1 w-8 h-8 rounded-full animate-ping opacity-40" style="background-color: ${color};"></div>` : ''}
+        <svg class="w-7 h-7 drop-shadow-md transition-transform group-hover:scale-110" viewBox="0 0 24 24" fill="${color}" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+          <circle cx="12" cy="9" r="3.2" fill="white"/>
+        </svg>
+        <span class="absolute top-1.5 text-[8.5px] font-extrabold text-slate-900 font-mono tracking-tighter">${label}</span>
+      </div>
+    `,
+    iconSize: [28, 36],
+    iconAnchor: [14, 32],
+    popupAnchor: [0, -32],
+  });
+};
+
+// Google Maps Pulsing GPS Blue Dot Icon
+const createGoogleGPSDotIcon = () => {
+  return L.divIcon({
+    className: 'google-gps-pulse-dot',
     html: `
       <div class="relative flex items-center justify-center">
-        ${isPulsing ? `<div class="pulse-ring" style="border-color: ${color}; background-color: ${color}20;"></div>` : ''}
-        <div style="background-color: ${color};" class="w-6 h-6 rounded-full border-2 border-white shadow-md flex items-center justify-center text-white text-[10px] font-bold">
-          ${label}
+        <div class="absolute w-8 h-8 rounded-full bg-blue-500/35 animate-ping"></div>
+        <div class="w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-md flex items-center justify-center">
+          <div class="w-1.5 h-1.5 rounded-full bg-white"></div>
         </div>
       </div>
     `,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
-    popupAnchor: [0, -14],
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    popupAnchor: [0, -12],
   });
 };
 
@@ -68,23 +90,6 @@ const createShelterIcon = () => {
   });
 };
 
-const createGPSUserIcon = () => {
-  return L.divIcon({
-    className: 'custom-gps-user-marker',
-    html: `
-      <div class="relative flex items-center justify-center">
-        <div class="absolute w-10 h-10 rounded-full bg-sky-500/30 animate-ping"></div>
-        <div class="w-6 h-6 rounded-full bg-sky-600 border-2 border-white shadow-elevated flex items-center justify-center text-white text-xs font-bold">
-          📍
-        </div>
-      </div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-    popupAnchor: [0, -16],
-  });
-};
-
 // Map Recenter Controller
 const MapRecenter: React.FC<{ center: [number, number]; zoom: number }> = ({ center, zoom }) => {
   const map = useMap();
@@ -92,6 +97,67 @@ const MapRecenter: React.FC<{ center: [number, number]; zoom: number }> = ({ cen
     map.setView(center, zoom, { animate: true });
   }, [center, zoom, map]);
   return null;
+};
+
+// Google Maps Floating Overlay Controls (Zoom + GPS Recenter + Sat/Map Switcher)
+const GoogleMapOverlayControls: React.FC<{
+  baseLayer: MapLayersState['baseLayer'];
+  onToggleLayer: () => void;
+  userLocation?: [number, number] | null;
+}> = ({ baseLayer, onToggleLayer, userLocation }) => {
+  const map = useMap();
+
+  return (
+    <>
+      {/* Bottom-Left: Google Maps Satellite / Roadmap Toggle Box */}
+      <div className="absolute bottom-4 left-4 z-400 pointer-events-auto">
+        <button
+          onClick={onToggleLayer}
+          className="flex items-center gap-2 bg-white/95 backdrop-blur-xs hover:bg-white text-slate-800 px-3 py-2 rounded-xl shadow-card border border-slate-200 text-xs font-semibold transition-all hover:shadow-md"
+          title="Toggle Google Maps Satellite / Streets"
+        >
+          <div className="w-6 h-6 rounded-md overflow-hidden border border-slate-300 shrink-0 shadow-inner flex items-center justify-center">
+            {baseLayer === 'satellite' ? (
+              <span className="text-[9px] font-bold text-slate-900 bg-slate-200 w-full h-full flex items-center justify-center">MAP</span>
+            ) : (
+              <span className="text-[9px] font-bold text-white bg-slate-900 w-full h-full flex items-center justify-center">SAT</span>
+            )}
+          </div>
+          <span>{baseLayer === 'satellite' ? 'Google Streets' : 'Google Satellite'}</span>
+        </button>
+      </div>
+
+      {/* Bottom-Right: Google Maps Zoom & GPS Buttons */}
+      <div className="absolute bottom-4 right-4 z-400 flex flex-col gap-2 items-center pointer-events-auto">
+        {userLocation && (
+          <button
+            onClick={() => map.flyTo(userLocation, 12, { animate: true, duration: 1.2 })}
+            className="w-9 h-9 rounded-xl bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 shadow-card border border-slate-200 flex items-center justify-center transition-all hover:scale-105"
+            title="Recenter on My Live GPS Location"
+          >
+            <Crosshair className="w-4 h-4 text-blue-600" />
+          </button>
+        )}
+
+        <div className="bg-white rounded-xl shadow-card border border-slate-200 overflow-hidden flex flex-col divide-y divide-slate-100">
+          <button
+            onClick={() => map.zoomIn()}
+            className="w-9 h-8 flex items-center justify-center text-slate-700 hover:bg-slate-50 font-bold text-base transition-colors"
+            title="Zoom in"
+          >
+            +
+          </button>
+          <button
+            onClick={() => map.zoomOut()}
+            className="w-9 h-8 flex items-center justify-center text-slate-700 hover:bg-slate-50 font-bold text-base transition-colors"
+            title="Zoom out"
+          >
+            −
+          </button>
+        </div>
+      </div>
+    </>
+  );
 };
 
 export interface MapLayersState {
@@ -118,6 +184,7 @@ interface IndiaSafetyMapProps {
   onSelectState?: (state: StateRiskData) => void;
   onSelectHazard?: (hazardId: string) => void;
   onSelectSOS?: (sosId: string) => void;
+  onToggleBaseLayer?: () => void;
   scope?: GeoScope;
   heightClass?: string;
 }
@@ -134,11 +201,17 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
   onSelectState,
   onSelectHazard,
   onSelectSOS,
+  onToggleBaseLayer,
   scope = 'india',
   heightClass = 'h-[580px]',
 }) => {
   const [mapCenter, setMapCenter] = useState<[number, number]>(() => userLocation || [21.5, 78.9]);
   const [mapZoom, setMapZoom] = useState<number>(() => (userLocation ? 9 : 5));
+  const [currentBase, setCurrentBase] = useState<MapLayersState['baseLayer']>(layers.baseLayer);
+
+  useEffect(() => {
+    setCurrentBase(layers.baseLayer);
+  }, [layers.baseLayer]);
 
   useEffect(() => {
     if (selectedState) {
@@ -153,38 +226,48 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
     }
   }, [selectedState, userLocation]);
 
-  // Tile URL based on base layer (100% Free Open GIS, Zero API key required, Zero Watermarks)
-  const getTileConfig = () => {
-    switch (layers.baseLayer) {
+  // Google Maps Tile Configuration (Streets, Satellite Hybrid, Terrain)
+  const getGoogleTileConfig = () => {
+    switch (currentBase) {
       case 'satellite':
         return {
-          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-          attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-          maxZoom: 18,
+          url: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+          attribution: 'Map data &copy; Google Maps Imagery',
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
+        };
+      case 'terrain':
+        return {
+          url: 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
+          attribution: 'Map data &copy; Google Maps Terrain',
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
         };
       case 'dark':
         return {
           url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-          attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
-          maxZoom: 16,
-        };
-      case 'terrain':
-        return {
-          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
-          attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey',
+          attribution: 'Map data &copy; Google Maps & Dark Canvas',
+          subdomains: ['0', '1', '2', '3'],
           maxZoom: 18,
         };
       case 'light':
       default:
         return {
-          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-          attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, TomTom',
-          maxZoom: 18,
+          url: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+          attribution: 'Map data &copy; Google Maps',
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
         };
     }
   };
 
-  const tileConfig = getTileConfig();
+  const tileConfig = getGoogleTileConfig();
+
+  const handleToggleBase = () => {
+    const next = currentBase === 'satellite' ? 'light' : 'satellite';
+    setCurrentBase(next);
+    if (onToggleBaseLayer) onToggleBaseLayer();
+  };
 
   // Simulated Cyclone Track Points for Cyclone Vayu
   const cycloneTrackCoords: [number, number][] = [
@@ -200,17 +283,26 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
       <MapContainer
         center={mapCenter}
         zoom={mapZoom}
+        zoomControl={false}
         scrollWheelZoom={true}
         className="w-full h-full z-10"
       >
         <MapRecenter center={mapCenter} zoom={mapZoom} />
 
-        {/* Clean Base Tile Layer (No watermark, No API key) */}
+        {/* Google Maps Base Tile Layer */}
         <TileLayer
-          key={layers.baseLayer}
+          key={currentBase}
           url={tileConfig.url}
           attribution={tileConfig.attribution}
+          subdomains={tileConfig.subdomains}
           maxZoom={tileConfig.maxZoom}
+        />
+
+        {/* Google Maps Floating Overlay Controls */}
+        <GoogleMapOverlayControls
+          baseLayer={currentBase}
+          onToggleLayer={handleToggleBase}
+          userLocation={userLocation}
         />
 
         {/* 1. Doppler Weather Radar Simulated Heat Layer */}
@@ -247,18 +339,6 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
                 color: '#D97706',
                 fillColor: '#F59E0B',
                 fillOpacity: 0.32,
-                weight: 1.5,
-              }}
-            />
-
-            {/* Mumbai / Konkan Monsoon Plume */}
-            <Circle
-              center={[19.1, 73.0]}
-              radius={85000}
-              pathOptions={{
-                color: '#0284C7',
-                fillColor: '#38BDF8',
-                fillOpacity: 0.30,
                 weight: 1.5,
               }}
             />
@@ -303,42 +383,42 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
           </>
         )}
 
-        {/* Real User GPS Location Indicator */}
+        {/* Real User GPS Location Indicator (Google Maps Blue Dot) */}
         {userLocation && (
-          <Marker position={userLocation} icon={createGPSUserIcon()}>
+          <Marker position={userLocation} icon={createGoogleGPSDotIcon()}>
             <Popup>
               <div className="p-2.5 font-sans text-xs max-w-xs">
-                <div className="flex items-center gap-1.5 font-bold text-sky-700 border-b border-sky-100 pb-1 mb-1">
-                  <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping" />
+                <div className="flex items-center gap-1.5 font-bold text-blue-700 border-b border-blue-100 pb-1 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
                   <span>📍 Your Real Live GPS Location</span>
                 </div>
                 <div className="text-[11px] text-slate-600 font-mono">
                   Coordinates: [{userLocation[0].toFixed(4)}°N, {userLocation[1].toFixed(4)}°E]
                 </div>
                 <div className="text-[10px] text-slate-400 mt-1">
-                  Telemetry & alerts calibrated to your exact sector.
+                  Google Maps calibration locked to your sector.
                 </div>
               </div>
             </Popup>
           </Marker>
         )}
 
-        {/* 3. State Risk Markers */}
+        {/* 3. State Risk Markers (Google Pins) */}
         {states.map((st) => {
           const color =
             st.riskLevel === 'critical'
-              ? '#DC2626'
+              ? '#EA4335' // Google Red
               : st.riskLevel === 'warning'
-              ? '#D97706'
+              ? '#FBBC04' // Google Amber
               : st.riskLevel === 'moderate'
-              ? '#F59E0B'
-              : '#10B981';
+              ? '#F2994A'
+              : '#34A853'; // Google Green
 
           return (
             <Marker
               key={st.id}
               position={st.centerCoordinates}
-              icon={createSvgIcon(color, st.id, st.riskLevel === 'critical')}
+              icon={createGooglePinIcon(color, st.id, st.riskLevel === 'critical')}
               eventHandlers={{
                 click: () => onSelectState && onSelectState(st),
               }}
@@ -374,7 +454,7 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
                   </div>
                   <button
                     onClick={() => onSelectState && onSelectState(st)}
-                    className="w-full bg-slate-900 hover:bg-red-600 text-white text-xs font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                    className="w-full bg-slate-900 hover:bg-blue-600 text-white text-xs font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
                   >
                     <span>View State Risk Brief</span>
                     <ChevronRight className="w-3.5 h-3.5" />
@@ -389,10 +469,10 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
         {hazards.map((hz) => {
           const color =
             hz.severity === 'critical'
-              ? '#DC2626'
+              ? '#EA4335'
               : hz.severity === 'warning'
-              ? '#D97706'
-              : '#0284C7';
+              ? '#FBBC04'
+              : '#4285F4';
 
           return (
             <React.Fragment key={hz.id}>
@@ -412,7 +492,7 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
 
               <Marker
                 position={hz.location.coordinates}
-                icon={createSvgIcon(color, hz.nature[0].toUpperCase(), hz.severity === 'critical')}
+                icon={createGooglePinIcon(color, hz.nature[0].toUpperCase(), hz.severity === 'critical')}
                 eventHandlers={{
                   click: () => onSelectHazard && onSelectHazard(hz.id),
                 }}
@@ -439,7 +519,7 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
                       <span>{hz.location.district}, {hz.location.state}</span>
                       <button
                         onClick={() => onSelectHazard && onSelectHazard(hz.id)}
-                        className="text-red-600 font-bold hover:underline"
+                        className="text-blue-600 font-bold hover:underline"
                       >
                         Full Details →
                       </button>
@@ -451,7 +531,7 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
           );
         })}
 
-        {/* 5. SOS Beacons (Pulsing Mobile Emergency Beacons) */}
+        {/* 5. SOS Beacons (Real Active Beacons Only) */}
         {layers.sosBeacons &&
           sosBeacons.map((sos) => (
             <Marker
@@ -498,50 +578,52 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
           shelters.map((sh) => (
             <Marker key={sh.id} position={sh.coordinates} icon={createShelterIcon()}>
               <Popup>
-                <div className="p-2.5 max-w-xs font-sans">
-                  <span className="text-[9px] font-mono bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded font-bold">
-                    {sh.type}
-                  </span>
-                  <div className="font-bold text-xs text-slate-900 mt-1 mb-0.5">{sh.name}</div>
-                  <div className="text-[10px] text-slate-500 mb-1.5">{sh.locationName}</div>
-                  <div className="text-[10px] font-mono bg-slate-50 p-1.5 rounded border border-slate-100">
-                    Capacity: <strong>{sh.currentOccupancy} / {sh.capacityPersons}</strong> ({Math.round((sh.currentOccupancy / sh.capacityPersons) * 100)}% full)
+                <div className="p-2.5 max-w-xs font-sans text-xs">
+                  <div className="font-bold text-indigo-700 mb-1 flex items-center gap-1">
+                    <span>🏠 {sh.name}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-600 mb-1.5">
+                    📍 {sh.district}, {sh.state}
+                  </div>
+                  <div className="bg-indigo-50 p-1.5 rounded text-[10px] font-mono text-indigo-900 mb-2">
+                    Capacity: <strong>{sh.currentOccupancy}/{sh.capacityPersons}</strong> ({sh.status})
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-mono">
+                    Emergency Contact: <strong>{sh.contactNumber}</strong>
                   </div>
                 </div>
               </Popup>
             </Marker>
           ))}
 
-        {/* 7. Active Emergency Navigation Routing Polyline */}
+        {/* 7. Active Emergency Dispatch Simulation Route */}
         {activeRoute && (
           <>
             <Polyline
               positions={activeRoute.waypoints}
               pathOptions={{
-                color: '#0284C7',
+                color: '#2563EB',
                 weight: 5,
+                opacity: 0.9,
                 lineCap: 'round',
                 lineJoin: 'round',
-                dashArray: '8, 8',
               }}
             />
-            {/* Responder Start Pin */}
+            {/* Responder Staging Start Pin */}
             <Marker
-              position={activeRoute.originCoordinates}
-              icon={createSvgIcon('#0284C7', '🚑', true)}
-            />
+              position={activeRoute.waypoints[0]}
+              icon={createGooglePinIcon('#2563EB', 'START')}
+            >
+              <Popup>
+                <div className="p-2 text-xs font-sans">
+                  <strong>Responder Staging Depot</strong>
+                  <div className="text-slate-500 text-[10px]">Staging Area</div>
+                </div>
+              </Popup>
+            </Marker>
           </>
         )}
       </MapContainer>
-
-      {/* Floating Tactical Overlay Badge */}
-      <div className="absolute top-3 left-3 z-20 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-200/90 shadow-subtle flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        <span className="text-xs font-bold text-slate-800 font-mono tracking-tight">
-          GIS SATELLITE RADAR : LIVE
-        </span>
-        <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">| CRS: EPSG:3857</span>
-      </div>
     </div>
   );
 };

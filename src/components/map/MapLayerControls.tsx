@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, Radio, Wind, Droplets, Flame, AlertOctagon, PhoneCall, Building, Eye, Map as MapIcon } from 'lucide-react';
+import { Layers, Radio, Wind, Droplets, Flame, AlertOctagon, PhoneCall, Building, Eye, Map as MapIcon, Globe } from 'lucide-react';
 import { MapLayersState } from './IndiaSafetyMap';
 
 interface MapLayerControlsProps {
@@ -24,16 +24,23 @@ export const MapLayerControls: React.FC<MapLayerControlsProps> = ({ layers, setL
     { key: 'safeShelters' as const, label: 'Safe Shelters', icon: Building, color: 'text-indigo-500' },
   ];
 
+  const baseStyles: Array<{ id: MapLayersState['baseLayer']; label: string }> = [
+    { id: 'light', label: 'Google Streets' },
+    { id: 'satellite', label: 'Google Satellite' },
+    { id: 'terrain', label: 'Google Terrain' },
+    { id: 'dark', label: 'Dark Mode' },
+  ];
+
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-card font-sans">
       <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-slate-100">
         <div className="flex items-center gap-2">
           <Layers className="w-4 h-4 text-slate-700" />
           <span className="text-xs font-bold text-slate-900 uppercase tracking-wider font-mono">
-            GIS Overlays
+            GIS Overlays & Google Maps
           </span>
         </div>
-        <span className="text-[10px] text-slate-400 font-mono">Multi-Layer Vector</span>
+        <span className="text-[10px] text-slate-400 font-mono">India Sector</span>
       </div>
 
       {/* Layer Checkbox Buttons */}
@@ -62,20 +69,20 @@ export const MapLayerControls: React.FC<MapLayerControlsProps> = ({ layers, setL
       </div>
 
       {/* Base Map Selector */}
-      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-        <span className="text-[11px] font-mono text-slate-500 font-semibold">Base Map:</span>
-        <div className="flex items-center gap-1">
-          {(['light', 'dark', 'satellite', 'terrain'] as const).map((mode) => (
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+        <span className="text-[11px] font-mono text-slate-500 font-semibold">Map Style:</span>
+        <div className="flex flex-wrap items-center gap-1">
+          {baseStyles.map((mode) => (
             <button
-              key={mode}
-              onClick={() => setBase(mode)}
-              className={`px-2 py-0.5 rounded text-[10px] font-mono capitalize transition-colors ${
-                layers.baseLayer === mode
-                  ? 'bg-slate-200 text-slate-900 font-bold'
-                  : 'text-slate-500 hover:text-slate-800'
+              key={mode.id}
+              onClick={() => setBase(mode.id)}
+              className={`px-2 py-1 rounded-md text-[10px] font-mono transition-all ${
+                layers.baseLayer === mode.id
+                  ? 'bg-blue-600 text-white font-bold shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
               }`}
             >
-              {mode}
+              {mode.label}
             </button>
           ))}
         </div>
