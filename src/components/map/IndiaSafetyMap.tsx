@@ -137,20 +137,38 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
     }
   }, [selectedState, scope]);
 
-  // Tile URL based on base layer (100% Free Open GIS, zero API token required)
-  const tileUrl =
-    layers.baseLayer === 'satellite'
-      ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-      : layers.baseLayer === 'dark'
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : layers.baseLayer === 'terrain'
-      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+  // Tile URL based on base layer (100% Free Open GIS, Zero API key required, Zero Watermarks)
+  const getTileConfig = () => {
+    switch (layers.baseLayer) {
+      case 'satellite':
+        return {
+          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+          maxZoom: 18,
+        };
+      case 'dark':
+        return {
+          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+          attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+          maxZoom: 16,
+        };
+      case 'terrain':
+        return {
+          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+          attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey',
+          maxZoom: 18,
+        };
+      case 'light':
+      default:
+        return {
+          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+          attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, TomTom',
+          maxZoom: 18,
+        };
+    }
+  };
 
-  const tileAttribution =
-    layers.baseLayer === 'satellite'
-      ? 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
-      : '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+  const tileConfig = getTileConfig();
 
   // Simulated Cyclone Track Points for Cyclone Vayu
   const cycloneTrackCoords: [number, number][] = [
@@ -171,12 +189,12 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
       >
         <MapRecenter center={mapCenter} zoom={mapZoom} />
 
-        {/* Base Tile Layer with CARTO/Esri open subdomains */}
+        {/* Clean Base Tile Layer (No watermark, No API key) */}
         <TileLayer
-          url={tileUrl}
-          attribution={tileAttribution}
-          maxZoom={19}
-          subdomains={['a', 'b', 'c', 'd']}
+          key={layers.baseLayer}
+          url={tileConfig.url}
+          attribution={tileConfig.attribution}
+          maxZoom={tileConfig.maxZoom}
         />
 
         {/* 1. Doppler Weather Radar Simulated Heat Layer */}
