@@ -23,10 +23,9 @@ export const LiveMapPage: React.FC<LiveMapPageProps> = ({
   onNavigate,
   onSelectHazardById,
 }) => {
-  const { selectedState, setSelectedStateById } = useLocation();
+  const { selectedState, setSelectedStateById, userCoordinates } = useLocation();
   const { beacons, activeRoute } = useSOS();
 
-  const [scope, setScope] = useState<GeoScope>('india');
   const [hazards, setHazards] = useState<HazardItem[]>(() => HazardService.getAllHazards());
   const [activeModalHazard, setActiveModalHazard] = useState<HazardItem | null>(null);
   const [activeDrawerState, setActiveDrawerState] = useState<StateRiskData | null>(null);
@@ -69,16 +68,16 @@ export const LiveMapPage: React.FC<LiveMapPageProps> = ({
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping" />
             <h1 className="font-extrabold text-base text-slate-900 font-mono uppercase tracking-wider">
-              GIS Situational & Geospatial Hazard Explorer
+              GIS Situational & Geospatial Hazard Explorer (India Grid)
             </h1>
           </div>
           <p className="text-xs text-slate-500 font-mono">
-            Doppler Weather Radar • Cyclone Trajectories • Inundation Layers • SOS Beacons
+            Doppler Weather Radar • Cyclone Trajectories • Inundation Layers • Active Beacons
           </p>
         </div>
 
         {/* Scope Selector */}
-        <GeoScopeSelector scope={scope} setScope={setScope} />
+        <GeoScopeSelector />
       </div>
 
       {/* Main Fullscreen GIS Map Grid */}
@@ -93,10 +92,11 @@ export const LiveMapPage: React.FC<LiveMapPageProps> = ({
             activeRoute={activeRoute}
             layers={mapLayers}
             selectedState={selectedState}
+            userLocation={userCoordinates}
             onSelectState={handleSelectState}
             onSelectHazard={handleSelectHazard}
             onSelectSOS={(id) => onNavigate('sos')}
-            scope={scope}
+            scope="india"
             heightClass="h-[680px]"
           />
 

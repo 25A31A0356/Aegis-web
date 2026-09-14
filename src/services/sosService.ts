@@ -1,9 +1,30 @@
-import { DEMO_SOS_BEACONS } from '../data/demoSOS';
 import { SOSBeacon, SOSTriageStatus } from '../types/sos';
 
+const STORAGE_KEY = 'aegis_user_sos_beacons';
+
 export class SOSService {
-  private static beacons: SOSBeacon[] = [...DEMO_SOS_BEACONS];
+  private static beacons: SOSBeacon[] = SOSService.loadFromStorage();
   private static listeners: Array<(beacons: SOSBeacon[]) => void> = [];
+
+  private static loadFromStorage(): SOSBeacon[] {
+    try {
+      const data = localStorage.getItem(STORAGE_KEY);
+      if (data) {
+        return JSON.parse(data);
+      }
+    } catch {
+      // ignore
+    }
+    return [];
+  }
+
+  private static saveToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.beacons));
+    } catch {
+      // ignore
+    }
+  }
 
   public static getBeacons(): SOSBeacon[] {
     return [...this.beacons];
@@ -46,33 +67,34 @@ export class SOSService {
       notes: notes || `Triage transitioned to ${newStatus.toUpperCase()}`,
     });
 
+    this.saveToStorage();
     this.notifyListeners();
     return { ...beacon };
   }
 
   public static createDemoBeacon(beaconData: Partial<SOSBeacon>): SOSBeacon {
-    const id = `SOS-APP-${Math.floor(1000 + Math.random() * 9000)}`;
+    const id = `SOS-IN-${Math.floor(1000 + Math.random() * 9000)}`;
     const newBeacon: SOSBeacon = {
       id,
-      anonymousAlias: `Beacon #${id.replace('SOS-', '')} (App User)`,
+      anonymousAlias: `Beacon #${id.replace('SOS-', '')} (Active User)`,
       phoneMasked: '+91 98**** 1122',
       timestamp: new Date().toISOString(),
       emergencyType: beaconData.emergencyType || 'flash_flood_stranding',
       emergencyTitle: beaconData.emergencyTitle || 'Emergency Distress Beacon Received',
-      locationName: beaconData.locationName || 'Near Current GPS Fix',
-      district: beaconData.district || 'Hyderabad',
-      state: beaconData.state || 'Telangana',
-      coordinates: beaconData.coordinates || [17.3850, 78.4867],
+      locationName: beaconData.locationName || 'Current User GPS Coordinates',
+      district: beaconData.district || 'Local District',
+      state: beaconData.state || 'India',
+      coordinates: beaconData.coordinates || [20.5937, 78.9629],
       gpsAccuracyMeters: 5.0,
-      batteryPercent: 78,
-      personsCount: beaconData.personsCount || 2,
+      batteryPercent: 82,
+      personsCount: beaconData.personsCount || 1,
       triageStatus: 'incoming',
       severity: 'critical',
       timeline: [
         {
           timestamp: new Date().toLocaleTimeString(),
-          actor: 'AEGIS Mobile App',
-          action: 'Distress Beacon Initialized by Citizen',
+          actor: 'AEGIS Web Incident Sentinel',
+          action: 'Distress Beacon Initialized',
           notes: 'High priority push received via secure emergency protocol.',
         },
       ],
@@ -80,8 +102,15 @@ export class SOSService {
     };
 
     this.beacons.unshift(newBeacon);
+    this.saveToStorage();
     this.notifyListeners();
     return newBeacon;
+  }
+
+  public static clearAllBeacons() {
+    this.beacons = [];
+    this.saveToStorage();
+    this.notifyListeners();
   }
 
   public static subscribe(listener: (beacons: SOSBeacon[]) => void): () => void {

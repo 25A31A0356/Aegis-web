@@ -28,7 +28,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onSelectHazardById,
   onFilterHazardsCategory,
 }) => {
-  const { selectedState, setSelectedStateById } = useLocation();
+  const { selectedState, setSelectedStateById, userCoordinates } = useLocation();
   const { beacons, activeRoute } = useSOS();
 
   const [hazards, setHazards] = useState<HazardItem[]>(() => HazardService.getAllHazards());
@@ -101,6 +101,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             activeRoute={activeRoute}
             layers={mapLayers}
             selectedState={selectedState}
+            userLocation={userCoordinates}
             onSelectState={handleSelectState}
             onSelectHazard={handleSelectHazard}
             onSelectSOS={(id) => onNavigate('sos')}

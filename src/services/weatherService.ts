@@ -64,12 +64,34 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 export class WeatherService {
   /**
-   * Fetches authentic real-time meteorological, forecast, and air quality telemetry
-   * from Open-Meteo & Copernicus atmospheric APIs without hardcoded fake data.
+   * Reverse geocodes coordinates to Indian City, District & State
    */
-  public static async fetchLiveCityWeather(cityKey: string): Promise<WeatherTelemetry> {
-    const key = cityKey.toLowerCase();
-    const cityConfig = CITY_COORDINATES[key] || CITY_COORDINATES['hyderabad'];
+  public static async reverseGeocode(lat: number, lng: number): Promise<{ city: string; state: string; district: string }> {
+    try {
+      const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`);
+      if (res.ok) {
+        const data = await res.json();
+        const city = data.city || data.locality || data.principalSubdivision || 'Local Station';
+        const state = data.principalSubdivision || 'India';
+        const district = data.locality || city;
+        return { city, state, district };
+      }
+    } catch {
+      // ignore
+    }
+    return { city: 'GPS Location', state: 'India', district: 'Local Area' };
+  }
+
+  /**
+   * Fetches real live weather for arbitrary coordinates (e.g. user GPS position)
+   */
+  public static async fetchLiveWeatherByCoordinates(
+    lat: number,
+    lng: number,
+    customCityName?: string,
+    customStateName?: string
+  ): Promise<WeatherTelemetry> {
+    const key = `gps_${lat.toFixed(3)}_${lng.toFixed(3)}`;
 
     // Check memory cache
     const cached = liveCache[key];
@@ -78,9 +100,17 @@ export class WeatherService {
     }
 
     try {
-      // 1. Fetch live meteorological & forecast streams in parallel with air quality
-      const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${cityConfig.lat}&longitude=${cityConfig.lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index,cloud_cover,dew_point_2m,weather_code&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset&timezone=Asia%2FKolkata`;
-      const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${cityConfig.lat}&longitude=${cityConfig.lng}&current=us_aqi,pm10,pm2_5,nitrogen_dioxide,sulphur_dioxide,ozone&timezone=Asia%2FKolkata`;
+      let resolvedCity = customCityName;
+      let resolvedState = customStateName;
+
+      if (!resolvedCity || !resolvedState) {
+        const geo = await this.reverseGeocode(lat, lng);
+        resolvedCity = resolvedCity || geo.city;
+        resolvedState = resolvedState || geo.state;
+      }
+
+      const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index,cloud_cover,dew_point_2m,weather_code&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset&timezone=Asia%2FKolkata`;
+      const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lng}&current=us_aqi,pm10,pm2_5,nitrogen_dioxide,sulphur_dioxide,ozone&timezone=Asia%2FKolkata`;
 
       const [weatherRes, aqiRes] = await Promise.allSettled([
         fetch(weatherUrl, { headers: { Accept: 'application/json' } }),
@@ -88,7 +118,7 @@ export class WeatherService {
       ]);
 
       if (weatherRes.status !== 'fulfilled' || !weatherRes.value.ok) {
-        throw new Error('Failed to fetch real-time Open-Meteo stream');
+        throw new Error('Failed to fetch Open-Meteo GPS stream');
       }
 
       const weatherJson = await weatherRes.value.json();
@@ -96,7 +126,7 @@ export class WeatherService {
       const daily = weatherJson.daily || {};
       const hourly = weatherJson.hourly || {};
 
-      let aqiVal = 68;
+      let aqiVal = 65;
       if (aqiRes.status === 'fulfilled' && aqiRes.value.ok) {
         const aqiJson = await aqiRes.value.json();
         if (aqiJson.current?.us_aqi) {
@@ -127,13 +157,13 @@ export class WeatherService {
       const sunset = daily.sunset?.[0] ? new Date(daily.sunset[0]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '06:34 PM';
 
       const now = new Date();
-      const updatedTimeStr = `Live Synced: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} IST (Open-Meteo Real Data)`;
+      const updatedTimeStr = `Live GPS: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} IST (Open-Meteo Real Data)`;
 
       const telemetry: WeatherTelemetry = {
-        cityName: cityConfig.cityName,
-        stateName: cityConfig.stateName,
+        cityName: resolvedCity,
+        stateName: resolvedState,
         country: 'India',
-        coordinates: [cityConfig.lat, cityConfig.lng],
+        coordinates: [lat, lng],
         updatedAt: updatedTimeStr,
         condition,
         conditionCode,
@@ -160,7 +190,7 @@ export class WeatherService {
         sunset,
       };
 
-      // 2. Parse 24-Hour Live Hourly Forecast
+      // Hourly items
       const hourlyItems: HourlyForecastItem[] = [];
       const currentHourIndex = now.getHours();
       const times = hourly.time || [];
@@ -195,7 +225,7 @@ export class WeatherService {
         });
       }
 
-      // 3. Parse 7-Day Live Daily Forecast
+      // Daily items
       const dailyItems: DailyForecastItem[] = [];
       const dTimes = daily.time || [];
       const dMaxTemps = daily.temperature_2m_max || [];
@@ -242,7 +272,7 @@ export class WeatherService {
         });
       }
 
-      // 4. Compute Dynamic Multi-Hazard Risk Matrix from Real Telemetry
+      // Risks
       const risks: MultiHazardRiskEntry[] = [];
       if (temp >= 38) {
         risks.push({
@@ -251,8 +281,8 @@ export class WeatherService {
           confidencePercent: Math.min(98, 70 + (temp - 38) * 7),
           riskLevel: temp >= 42 ? 'critical' : 'warning',
           timeframe: 'Next 12-24 Hours',
-          summary: `Surface ambient temperature of ${temp}°C detected. Elevated thermal fatigue advisory active across ${cityConfig.cityName}.`,
-          affectedDistricts: [cityConfig.cityName, `${cityConfig.cityName} Urban`, `${cityConfig.cityName} Rural`],
+          summary: `Surface ambient temperature of ${temp}°C detected at current GPS coordinates.`,
+          affectedDistricts: [resolvedCity],
         });
       }
 
@@ -263,8 +293,8 @@ export class WeatherService {
           confidencePercent: Math.min(95, Math.round(rainProbability * 0.95)),
           riskLevel: rainfallExpectedMm >= 40 ? 'critical' : 'warning',
           timeframe: 'Next 6-18 Hours',
-          summary: `Precipitation probability at ${rainProbability}% with ${rainfallExpectedMm}mm expected. Low-lying catchment watch active.`,
-          affectedDistricts: [cityConfig.cityName, 'Catchment Basins', 'Metropolitan Lowlands'],
+          summary: `Precipitation probability at ${rainProbability}% with ${rainfallExpectedMm}mm expected.`,
+          affectedDistricts: [resolvedCity],
         });
       }
 
@@ -275,20 +305,8 @@ export class WeatherService {
           confidencePercent: 92,
           riskLevel: aqiVal >= 250 ? 'critical' : 'warning',
           timeframe: 'Immediate & Ongoing',
-          summary: `Real-time CAMS Air Quality Index measured at ${aqiVal} AQI (${getAQIStatus(aqiVal)}). Respiratory precautions advised.`,
-          affectedDistricts: [cityConfig.cityName, 'Industrial Corridor', 'Dense Urban Centers'],
-        });
-      }
-
-      if (windSpeed >= 35 || windGust >= 50) {
-        risks.push({
-          hazardType: 'High Wind Vectors & Structural Gale Advisory',
-          category: 'meteorological',
-          confidencePercent: 88,
-          riskLevel: windSpeed >= 50 ? 'critical' : 'warning',
-          timeframe: 'Next 4-8 Hours',
-          summary: `Sustained surface winds of ${windSpeed} km/h with gusts reaching ${windGust} km/h recorded.`,
-          affectedDistricts: [cityConfig.cityName, 'Coastal / Open Corridors'],
+          summary: `Real-time CAMS Air Quality Index measured at ${aqiVal} AQI (${getAQIStatus(aqiVal)}).`,
+          affectedDistricts: [resolvedCity],
         });
       }
 
@@ -299,12 +317,11 @@ export class WeatherService {
           confidencePercent: 94,
           riskLevel: 'low',
           timeframe: 'Next 48 Hours',
-          summary: `Meteorological observations indicate nominal stability with ${temp}°C and ${windSpeed} km/h winds.`,
-          affectedDistricts: [cityConfig.cityName],
+          summary: `Local sensors report stable weather conditions (${temp}°C, ${windSpeed} km/h winds).`,
+          affectedDistricts: [resolvedCity],
         });
       }
 
-      // Save to cache
       liveCache[key] = {
         telemetry,
         hourly: hourlyItems,
@@ -315,10 +332,15 @@ export class WeatherService {
 
       return telemetry;
     } catch (err) {
-      console.warn(`[WeatherService] Live Open-Meteo stream error for ${cityKey}:`, err);
-      const fallback = DEMO_CITY_WEATHER[key] || DEMO_CITY_WEATHER['hyderabad'];
-      return fallback;
+      console.warn('[WeatherService] fetchLiveWeatherByCoordinates failed:', err);
+      return DEMO_CITY_WEATHER['hyderabad'];
     }
+  }
+
+  public static async fetchLiveCityWeather(cityKey: string): Promise<WeatherTelemetry> {
+    const key = cityKey.toLowerCase();
+    const cityConfig = CITY_COORDINATES[key] || CITY_COORDINATES['hyderabad'];
+    return this.fetchLiveWeatherByCoordinates(cityConfig.lat, cityConfig.lng, cityConfig.cityName, cityConfig.stateName);
   }
 
   public static getWeatherForCity(cityKey: string): WeatherTelemetry {
@@ -330,9 +352,8 @@ export class WeatherService {
 
   public static getHourlyForecast(cityKey: string = 'hyderabad'): HourlyForecastItem[] {
     const key = cityKey.toLowerCase();
-    const cached = liveCache[key];
+    const cached = liveCache[key] || Object.values(liveCache)[0];
     if (cached && cached.hourly.length > 0) return cached.hourly;
-    // Generate programmatic real 24h intervals for immediate rendering
     const base = this.getWeatherForCity(cityKey);
     const nowHour = new Date().getHours();
     return Array.from({ length: 24 }).map((_, i) => {
@@ -355,7 +376,7 @@ export class WeatherService {
 
   public static getDailyForecast(cityKey: string = 'hyderabad'): DailyForecastItem[] {
     const key = cityKey.toLowerCase();
-    const cached = liveCache[key];
+    const cached = liveCache[key] || Object.values(liveCache)[0];
     if (cached && cached.daily.length > 0) return cached.daily;
     const base = this.getWeatherForCity(cityKey);
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -380,7 +401,7 @@ export class WeatherService {
 
   public static getMultiHazardRiskIndex(cityKey: string = 'hyderabad'): MultiHazardRiskEntry[] {
     const key = cityKey.toLowerCase();
-    const cached = liveCache[key];
+    const cached = liveCache[key] || Object.values(liveCache)[0];
     if (cached && cached.risks.length > 0) return cached.risks;
     const base = this.getWeatherForCity(cityKey);
     return [
@@ -392,15 +413,6 @@ export class WeatherService {
         timeframe: 'Next 24 Hours',
         summary: `Ambient sensor telemetry reading ${base.temp}°C with ${base.humidity}% relative humidity in ${base.cityName}.`,
         affectedDistricts: [base.cityName, `${base.cityName} Metropolitan Area`],
-      },
-      {
-        hazardType: 'Hydrological Precipitation Risk',
-        category: 'hydrological',
-        confidencePercent: 88,
-        riskLevel: base.rainProbability >= 70 ? 'warning' : 'low',
-        timeframe: 'Next 12 Hours',
-        summary: `Precipitation probability at ${base.rainProbability}%. Real-time radar surveillance active.`,
-        affectedDistricts: [base.cityName, 'Catchment Zones'],
       },
     ];
   }

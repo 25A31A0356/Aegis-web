@@ -37,7 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSearch,
   onOpenProfile,
 }) => {
-  const { selectedCityKey, weather, setSelectedCity, selectedState } = useLocation();
+  const { selectedCityKey, weather, setSelectedCity, selectedState, isGpsActive, detectCurrentLocation } = useLocation();
   const { unreadCount, setIsDrawerOpen } = useNotifications();
   const { beacons } = useSOS();
   const { profile } = useProfile();
@@ -144,9 +144,31 @@ export const Header: React.FC<HeaderProps> = ({
 
               {/* City Dropdown Menu */}
               {isCityDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-elevated border border-slate-200 py-2 z-50 animate-in fade-in slide-in-from-top-2">
-                  <div className="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono">
-                    Select Indian Urban Center
+                <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-elevated border border-slate-200 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                  <div className="p-2 border-b border-slate-100">
+                    <button
+                      onClick={() => {
+                        detectCurrentLocation();
+                        setIsCityDropdownOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                        isGpsActive
+                          ? 'bg-sky-100 text-sky-900 border border-sky-300'
+                          : 'bg-slate-900 text-white hover:bg-sky-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping" />
+                        <span>{isGpsActive ? '📍 Real GPS Active' : '📍 Use My Real GPS Location'}</span>
+                      </div>
+                      <span className="text-[10px] font-mono uppercase bg-white/20 px-1.5 py-0.5 rounded">
+                        India
+                      </span>
+                    </button>
+                  </div>
+
+                  <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                    Or Select Indian Urban Station
                   </div>
                   <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
                     {availableCities.map((city) => (
@@ -157,7 +179,7 @@ export const Header: React.FC<HeaderProps> = ({
                           setIsCityDropdownOpen(false);
                         }}
                         className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition-colors ${
-                          selectedCityKey === city.key ? 'bg-sky-50 font-bold text-sky-900' : 'text-slate-700'
+                          !isGpsActive && selectedCityKey === city.key ? 'bg-sky-50 font-bold text-sky-900' : 'text-slate-700'
                         }`}
                       >
                         <div>

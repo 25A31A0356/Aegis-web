@@ -68,6 +68,23 @@ const createShelterIcon = () => {
   });
 };
 
+const createGPSUserIcon = () => {
+  return L.divIcon({
+    className: 'custom-gps-user-marker',
+    html: `
+      <div class="relative flex items-center justify-center">
+        <div class="absolute w-10 h-10 rounded-full bg-sky-500/30 animate-ping"></div>
+        <div class="w-6 h-6 rounded-full bg-sky-600 border-2 border-white shadow-elevated flex items-center justify-center text-white text-xs font-bold">
+          📍
+        </div>
+      </div>
+    `,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+    popupAnchor: [0, -16],
+  });
+};
+
 // Map Recenter Controller
 const MapRecenter: React.FC<{ center: [number, number]; zoom: number }> = ({ center, zoom }) => {
   const map = useMap();
@@ -97,6 +114,7 @@ interface IndiaSafetyMapProps {
   activeRoute?: SimulatedRoute | null;
   layers: MapLayersState;
   selectedState?: StateRiskData | null;
+  userLocation?: [number, number] | null;
   onSelectState?: (state: StateRiskData) => void;
   onSelectHazard?: (hazardId: string) => void;
   onSelectSOS?: (sosId: string) => void;
@@ -112,30 +130,28 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
   activeRoute,
   layers,
   selectedState,
+  userLocation,
   onSelectState,
   onSelectHazard,
   onSelectSOS,
   scope = 'india',
   heightClass = 'h-[580px]',
 }) => {
-  const [mapCenter, setMapCenter] = useState<[number, number]>([21.5, 79.5]);
-  const [mapZoom, setMapZoom] = useState<number>(5);
+  const [mapCenter, setMapCenter] = useState<[number, number]>(() => userLocation || [21.5, 78.9]);
+  const [mapZoom, setMapZoom] = useState<number>(() => (userLocation ? 9 : 5));
 
   useEffect(() => {
     if (selectedState) {
       setMapCenter(selectedState.centerCoordinates);
       setMapZoom(7);
-    } else if (scope === 'india') {
-      setMapCenter([21.5, 79.5]);
+    } else if (userLocation) {
+      setMapCenter(userLocation);
+      setMapZoom(8);
+    } else {
+      setMapCenter([21.5, 78.9]);
       setMapZoom(5);
-    } else if (scope === 'asia') {
-      setMapCenter([22.0, 95.0]);
-      setMapZoom(4);
-    } else if (scope === 'global') {
-      setMapCenter([20.0, 50.0]);
-      setMapZoom(3);
     }
-  }, [selectedState, scope]);
+  }, [selectedState, userLocation]);
 
   // Tile URL based on base layer (100% Free Open GIS, Zero API key required, Zero Watermarks)
   const getTileConfig = () => {
@@ -285,6 +301,26 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
               }}
             />
           </>
+        )}
+
+        {/* Real User GPS Location Indicator */}
+        {userLocation && (
+          <Marker position={userLocation} icon={createGPSUserIcon()}>
+            <Popup>
+              <div className="p-2.5 font-sans text-xs max-w-xs">
+                <div className="flex items-center gap-1.5 font-bold text-sky-700 border-b border-sky-100 pb-1 mb-1">
+                  <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping" />
+                  <span>📍 Your Real Live GPS Location</span>
+                </div>
+                <div className="text-[11px] text-slate-600 font-mono">
+                  Coordinates: [{userLocation[0].toFixed(4)}°N, {userLocation[1].toFixed(4)}°E]
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1">
+                  Telemetry & alerts calibrated to your exact sector.
+                </div>
+              </div>
+            </Popup>
+          </Marker>
         )}
 
         {/* 3. State Risk Markers */}

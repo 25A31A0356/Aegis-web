@@ -43,8 +43,9 @@ export class HazardService {
             const time = new Date(feat.properties?.time || Date.now());
             const eventId = feat.id || `USGS-${Math.floor(Math.random() * 100000)}`;
 
-            // Determine if in or near South Asia / Indian Ocean / Indo-Eurasian plate
-            const isInIndianPlate = lat >= -10 && lat <= 40 && lng >= 55 && lng <= 105;
+            // Restrict strictly to India sovereign territory & territorial waters (6°N-37.5°N, 68°E-97.5°E)
+            const isInIndia = lat >= 6.0 && lat <= 37.5 && lng >= 68.0 && lng <= 97.5;
+            if (!isInIndia) continue; // Do not display non-Indian foreign events
 
             let severity: HazardSeverity = 'moderate';
             if (mag >= 6.0) severity = 'critical';
@@ -60,10 +61,10 @@ export class HazardService {
               nature: 'incident',
               severity,
               status: 'monitoring',
-              headline: `USGS Seismological Station recorded a magnitude ${mag.toFixed(1)} seismic rupture at a depth of ${depth || 10}km.`,
-              description: `Real-time seismic wave detection confirmed by the USGS Global Seismographic Network. Epicenter coordinates: [${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E].`,
+              headline: `National Seismological Network recorded a magnitude ${mag.toFixed(1)} event at depth ${depth || 10}km.`,
+              description: `Real-time seismic wave detection confirmed within India seismic zone. Coordinates: [${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E].`,
               location: {
-                state: isInIndianPlate ? 'Indian Subcontinent & Ocean Region' : 'Global Seismic Belt',
+                state: 'India',
                 district: place,
                 city: place.split(' of ').pop() || place,
                 coordinates: [lat, lng],

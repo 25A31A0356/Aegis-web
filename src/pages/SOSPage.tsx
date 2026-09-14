@@ -4,11 +4,14 @@ import { SOSDetailDrawer } from '../components/sos/SOSDetailDrawer';
 import { SOSRouteSimulator } from '../components/sos/SOSRouteSimulator';
 import { IndiaSafetyMap, MapLayersState } from '../components/map/IndiaSafetyMap';
 import { useSOS } from '../context/SOSContext';
-import { DEMO_HAZARDS } from '../data/demoHazards';
+import { useLocation } from '../context/LocationContext';
+import { HazardService } from '../services/hazardService';
 import { DEMO_STATES } from '../data/demoStates';
 import { DEMO_SHELTERS } from '../data/demoShelters';
 import { SOSBeacon } from '../types/sos';
-import { PhoneCall, ShieldAlert, Navigation, PlusCircle, Search, Filter } from 'lucide-react';
+import { HazardItem } from '../types/hazard';
+import { PhoneCall, ShieldAlert, ShieldCheck, Navigation, PlusCircle, Search, Filter, Radio, Trash2 } from 'lucide-react';
+import { SOSService } from '../services/sosService';
 
 interface SOSPageProps {
   preSelectedSOSId?: string | null;
@@ -26,9 +29,20 @@ export const SOSPage: React.FC<SOSPageProps> = ({ preSelectedSOSId }) => {
     createNewSOSBeacon,
   } = useSOS();
 
+  const { weather, userCoordinates } = useLocation();
+  const [hazards, setHazards] = useState<HazardItem[]>(() => HazardService.getAllHazards());
+
   const [triageFilter, setTriageFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    HazardService.fetchLiveHazards().then(setHazards).catch(console.error);
+    const unsubscribe = HazardService.subscribe(() => {
+      setHazards(HazardService.getAllHazards());
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     if (preSelectedSOSId) {
@@ -71,21 +85,16 @@ export const SOSPage: React.FC<SOSPageProps> = ({ preSelectedSOSId }) => {
     baseLayer: 'light',
   };
 
-  const handleSimulateNewBeacon = () => {
-    const locations = [
-      { name: 'Gachibowli Outer Ring Road', district: 'Hyderabad', state: 'Telangana', coords: [17.4401, 78.3489] as [number, number] },
-      { name: 'Marine Drive Coastal Seawall', district: 'Mumbai', state: 'Maharashtra', coords: [18.9438, 72.8234] as [number, number] },
-      { name: 'Kottayam Meenachil Basin', district: 'Kottayam', state: 'Kerala', coords: [9.5916, 76.5222] as [number, number] },
-    ];
-    const loc = locations[Math.floor(Math.random() * locations.length)];
+  const handleTriggerRealGPSBeacon = () => {
+    const coords: [number, number] = userCoordinates || [weather.coordinates[0], weather.coordinates[1]];
     const created = createNewSOSBeacon({
       emergencyType: 'flash_flood_stranding',
-      emergencyTitle: `Citizen Distress Call (${loc.district})`,
-      locationName: loc.name,
-      district: loc.district,
-      state: loc.state,
-      coordinates: loc.coords,
-      personsCount: Math.floor(2 + Math.random() * 3),
+      emergencyTitle: `Emergency Distress Beacon (${weather.cityName})`,
+      locationName: `Near ${weather.cityName} Sector`,
+      district: weather.cityName,
+      state: weather.stateName,
+      coordinates: coords,
+      personsCount: 1,
     });
     setSelectedBeacon(created);
     setIsDetailDrawerOpen(true);
@@ -97,28 +106,38 @@ export const SOSPage: React.FC<SOSPageProps> = ({ preSelectedSOSId }) => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-card">
         <div>
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping" />
+            <span className={`w-2.5 h-2.5 rounded-full ${activeBeaconsCount > 0 ? 'bg-red-600 animate-ping' : 'bg-emerald-500'}`} />
             <h1 className="font-extrabold text-base text-slate-900 font-mono uppercase tracking-wider">
-              Emergency SOS Response & Dispatch Command Center
+              Emergency SOS Beacon & Citizen Distress Response Hub
             </h1>
           </div>
           <p className="text-xs text-slate-500 font-mono mt-0.5">
-            Real-Time Distress Telemetry Ingested from AEGIS Mobile Ecosystem
+            Real-Time GPS Triangulation • Instant Multi-Agency Dispatch (India Grid)
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="bg-red-50 text-red-700 border border-red-200 px-3 py-1.5 rounded-xl font-mono text-xs font-extrabold flex items-center gap-2">
-            <PhoneCall className="w-4 h-4 animate-bounce" />
-            <span>{activeBeaconsCount} ACTIVE DISTRESS BEACONS</span>
-          </div>
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2.5">
+          {beacons.length > 0 && (
+            <button
+              onClick={() => {
+                SOSService.clearAllBeacons();
+                clearActiveRoute();
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-700 transition-colors border border-slate-200"
+              title="Clear all local test beacons"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear Beacons</span>
+            </button>
+          )}
 
           <button
-            onClick={handleSimulateNewBeacon}
-            className="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-sm transition-all flex items-center gap-1.5"
+            onClick={handleTriggerRealGPSBeacon}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-sm hover:shadow-md transition-all font-mono"
           >
-            <PlusCircle className="w-4 h-4" />
-            <span>Simulate Mobile SOS</span>
+            <Radio className="w-4 h-4 animate-pulse" />
+            <span>Trigger Distress Signal (My GPS)</span>
           </button>
         </div>
       </div>
@@ -155,22 +174,43 @@ export const SOSPage: React.FC<SOSPageProps> = ({ preSelectedSOSId }) => {
             </select>
           </div>
 
-          {/* Cards List */}
-          <div className="space-y-3 max-h-[720px] overflow-y-auto pr-1">
-            {filteredBeacons.map((beacon) => (
-              <SOSTriageCard
-                key={beacon.id}
-                beacon={beacon}
-                isSelected={selectedBeacon?.id === beacon.id}
-                onSelect={(b) => {
-                  setSelectedBeacon(b);
-                  setIsDetailDrawerOpen(true);
-                }}
-                onUpdateStatus={(id, st) => updateBeaconTriage(id, st)}
-                onSimulateRoute={(b) => triggerEmergencyRouteSimulation(b)}
-              />
-            ))}
-          </div>
+          {/* Cards List or Clear State */}
+          {filteredBeacons.length === 0 ? (
+            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-card text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <h3 className="font-extrabold text-sm text-slate-900 font-sans">
+                Sector Status: 100% Clear (0 Active Distresses)
+              </h3>
+              <p className="text-xs text-slate-500 font-mono leading-relaxed max-w-sm mx-auto">
+                No active distress beacons registered. When a real emergency signal is triggered, it will immediately appear with GPS coordinates and dispatch routing here.
+              </p>
+              <button
+                onClick={handleTriggerRealGPSBeacon}
+                className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors shadow-sm"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Test Emergency Distress from My GPS</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3 max-h-[720px] overflow-y-auto pr-1">
+              {filteredBeacons.map((beacon) => (
+                <SOSTriageCard
+                  key={beacon.id}
+                  beacon={beacon}
+                  isSelected={selectedBeacon?.id === beacon.id}
+                  onSelect={(b) => {
+                    setSelectedBeacon(b);
+                    setIsDetailDrawerOpen(true);
+                  }}
+                  onUpdateStatus={(id, st) => updateBeaconTriage(id, st)}
+                  onSimulateRoute={(b) => triggerEmergencyRouteSimulation(b)}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Right: Map & Emergency Navigation Route Simulator (7 cols) */}
@@ -188,18 +228,21 @@ export const SOSPage: React.FC<SOSPageProps> = ({ preSelectedSOSId }) => {
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-card space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 font-mono text-xs">
               <span className="font-bold text-slate-900 uppercase">
-                Live Distress Dispatch GIS Tracking
+                Live Distress Dispatch GIS Tracking (India Grid)
               </span>
-              <span className="text-slate-400">Pulsing Beacons Active</span>
+              <span className={activeBeaconsCount > 0 ? 'text-red-600 font-bold' : 'text-emerald-600 font-bold'}>
+                {activeBeaconsCount > 0 ? `${activeBeaconsCount} Active Beacon(s)` : 'Sector Clear (0 Distresses)'}
+              </span>
             </div>
 
             <IndiaSafetyMap
-              hazards={DEMO_HAZARDS}
+              hazards={hazards}
               states={DEMO_STATES}
               sosBeacons={beacons}
               shelters={DEMO_SHELTERS}
               activeRoute={activeRoute}
               layers={mapLayers}
+              userLocation={userCoordinates}
               onSelectSOS={(id) => {
                 const match = beacons.find((b) => b.id === id);
                 if (match) {
@@ -207,6 +250,7 @@ export const SOSPage: React.FC<SOSPageProps> = ({ preSelectedSOSId }) => {
                   setIsDetailDrawerOpen(true);
                 }
               }}
+              scope="india"
               heightClass="h-[520px]"
             />
           </div>
