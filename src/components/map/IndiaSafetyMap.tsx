@@ -137,19 +137,19 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
     }
   }, [selectedState, scope]);
 
-  // Tile URL based on base layer
+  // Tile URL based on base layer (100% Free Open GIS, zero API token required)
   const tileUrl =
     layers.baseLayer === 'satellite'
       ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
       : layers.baseLayer === 'dark'
       ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
       : layers.baseLayer === 'terrain'
-      ? 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'
-      : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 
   const tileAttribution =
     layers.baseLayer === 'satellite'
-      ? 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+      ? 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
       : '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
   // Simulated Cyclone Track Points for Cyclone Vayu
@@ -171,8 +171,13 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
       >
         <MapRecenter center={mapCenter} zoom={mapZoom} />
 
-        {/* Base Tile Layer */}
-        <TileLayer url={tileUrl} attribution={tileAttribution} maxZoom={18} />
+        {/* Base Tile Layer with CARTO/Esri open subdomains */}
+        <TileLayer
+          url={tileUrl}
+          attribution={tileAttribution}
+          maxZoom={19}
+          subdomains={['a', 'b', 'c', 'd']}
+        />
 
         {/* 1. Doppler Weather Radar Simulated Heat Layer */}
         {layers.weatherRadar && (
