@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, X, AlertTriangle, MapPin, PhoneCall, Building, ChevronRight, ShieldAlert } from 'lucide-react';
+import { Search, X, AlertTriangle, MapPin, PhoneCall, Building, ChevronRight, ShieldAlert, Sparkles } from 'lucide-react';
 import { DEMO_HAZARDS } from '../../data/demoHazards';
 import { DEMO_STATES } from '../../data/demoStates';
 import { DEMO_SOS_BEACONS } from '../../data/demoSOS';
@@ -37,8 +37,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        if (isOpen) onClose();
-        else onClose(); // parent handles toggle
+        onClose();
       }
       if (e.key === 'Escape' && isOpen) {
         onClose();
@@ -96,43 +95,43 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 px-4 bg-[#075B8A]/60 backdrop-blur-xs animate-in fade-in">
       <div
-        className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[80vh]"
+        className="w-full max-w-2xl bg-white rounded-[24px] shadow-float border border-[#DCEBED] overflow-hidden flex flex-col max-h-[80vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input Bar */}
-        <div className="flex items-center px-4 py-3.5 border-b border-slate-200 bg-slate-50/50">
-          <Search className="w-5 h-5 text-slate-400 mr-3 shrink-0" />
+        <div className="flex items-center px-5 py-4 border-b border-[#DCEBED] bg-[#F4F8FA]">
+          <Search className="w-5 h-5 text-[#075B8A] mr-3 shrink-0" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search hazards, Indian cities, states, SOS IDs, or shelters..."
-            className="w-full bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none font-sans"
+            className="w-full bg-transparent text-xs sm:text-sm text-[#18364A] placeholder:text-[#708696] focus:outline-none font-sans"
           />
           {query && (
-            <button onClick={() => setQuery('')} className="p-1 text-slate-400 hover:text-slate-600">
+            <button onClick={() => setQuery('')} className="p-1 text-[#708696] hover:text-[#18364A]">
               <X className="w-4 h-4" />
             </button>
           )}
           <button
             onClick={onClose}
-            className="ml-2 text-xs font-mono bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-1 rounded"
+            className="ml-2 text-[10px] font-mono bg-white hover:bg-[#EEF5F8] text-[#708696] px-2 py-1 rounded-lg border border-[#DCEBED]"
           >
             ESC
           </button>
         </div>
 
         {/* Results List */}
-        <div className="overflow-y-auto p-4 space-y-6 divide-y divide-slate-100">
+        <div className="overflow-y-auto p-4 space-y-5 divide-y divide-[#DCEBED]/60">
           {/* Hazards Section */}
           {matchingHazards.length > 0 && (
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono mb-2 flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                Active Hazards & Advisories ({matchingHazards.length})
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[#708696] font-mono mb-2 flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-[#F4C84A]" />
+                <span>Active Hazards & Advisories ({matchingHazards.length})</span>
               </div>
               <div className="space-y-1.5">
                 {matchingHazards.map((item) => (
@@ -143,32 +142,32 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                       if (onSelectHazard) onSelectHazard(item.id);
                       onNavigate('hazards');
                     }}
-                    className="p-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 cursor-pointer flex items-center justify-between group transition-colors"
+                    className="p-3 rounded-2xl hover:bg-[#F4F8FA] border border-transparent hover:border-[#18C3D0] cursor-pointer flex items-center justify-between group transition-all"
                   >
                     <div className="flex items-start gap-3">
                       <span
-                        className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                        className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${
                           item.severity === 'critical'
-                            ? 'bg-red-500 animate-pulse'
+                            ? 'bg-[#E94B68] animate-pulse'
                             : item.severity === 'warning'
-                            ? 'bg-amber-500'
-                            : 'bg-sky-500'
+                            ? 'bg-[#F4C84A]'
+                            : 'bg-[#18C3D0]'
                         }`}
                       />
                       <div>
-                        <div className="text-xs font-semibold text-slate-900 group-hover:text-red-600 transition-colors">
+                        <div className="text-xs font-bold text-[#18364A] group-hover:text-[#075B8A] transition-colors">
                           {item.title}
                         </div>
-                        <div className="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+                        <div className="text-[10.5px] text-[#708696] flex items-center gap-2 mt-0.5 font-mono">
                           <span>{item.location.state} • {item.location.district}</span>
                           <span>•</span>
-                          <span className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.2 rounded">
+                          <span className="bg-[#EDFAFC] text-[#075B8A] px-1.5 py-0.5 rounded text-[9px] font-bold">
                             {item.categoryName}
                           </span>
                         </div>
                       </div>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-600 transition-transform group-hover:translate-x-1" />
+                    <ChevronRight className="w-4 h-4 text-[#708696] group-hover:text-[#075B8A] transition-transform group-hover:translate-x-1" />
                   </div>
                 ))}
               </div>
@@ -178,9 +177,9 @@ export const SearchModal: React.FC<SearchModalProps> = ({
           {/* States & Urban Centers Section */}
           {matchingStates.length > 0 && (
             <div className="pt-4">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono mb-2 flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-sky-500" />
-                States & Monitored Regions ({matchingStates.length})
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[#708696] font-mono mb-2 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-[#075B8A]" />
+                <span>States & Monitored Regions ({matchingStates.length})</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {matchingStates.map((st) => (
@@ -189,25 +188,25 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     onClick={() => {
                       setSelectedStateById(st.id);
                       onClose();
-                      onNavigate('dashboard');
+                      onNavigate('homepage');
                     }}
-                    className="p-2.5 rounded-xl hover:bg-slate-50 border border-slate-100 hover:border-slate-200 cursor-pointer flex items-center justify-between group transition-colors"
+                    className="p-3 rounded-2xl hover:bg-[#F4F8FA] border border-[#DCEBED] hover:border-[#18C3D0] cursor-pointer flex items-center justify-between group transition-colors"
                   >
                     <div>
-                      <div className="text-xs font-semibold text-slate-900 group-hover:text-sky-600">
+                      <div className="text-xs font-bold text-[#18364A] group-hover:text-[#075B8A]">
                         {st.name} ({st.id})
                       </div>
-                      <div className="text-[10px] text-slate-500">
+                      <div className="text-[10px] text-[#708696] font-mono">
                         Capital: {st.capital} • {st.populationCrores} Cr Pop
                       </div>
                     </div>
                     <span
-                      className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase ${
+                      className={`text-[9px] font-mono px-2 py-0.5 rounded-full font-bold uppercase border ${
                         st.riskLevel === 'critical'
-                          ? 'bg-red-100 text-red-700'
+                          ? 'bg-[#FEF1F3] text-[#E94B68] border-[#FDC8D1]'
                           : st.riskLevel === 'warning'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-[#FFFBF0] text-[#B78809] border-[#FDE8A4]'
+                          : 'bg-[#EFFCF6] text-[#1E8A63] border-[#B7F1DC]'
                       }`}
                     >
                       {st.riskLevel}
@@ -221,9 +220,9 @@ export const SearchModal: React.FC<SearchModalProps> = ({
           {/* SOS Distress Beacons */}
           {matchingSOS.length > 0 && (
             <div className="pt-4">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono mb-2 flex items-center gap-1.5">
-                <PhoneCall className="w-3.5 h-3.5 text-red-500" />
-                Emergency SOS Beacons ({matchingSOS.length})
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[#708696] font-mono mb-2 flex items-center gap-1.5">
+                <PhoneCall className="w-3.5 h-3.5 text-[#E94B68]" />
+                <span>Emergency SOS Beacons ({matchingSOS.length})</span>
               </div>
               <div className="space-y-1.5">
                 {matchingSOS.map((sos) => (
@@ -234,20 +233,20 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                       onClose();
                       onNavigate('sos');
                     }}
-                    className="p-2.5 rounded-xl hover:bg-red-50/50 border border-slate-100 hover:border-red-200 cursor-pointer flex items-center justify-between group transition-colors"
+                    className="p-3 rounded-2xl hover:bg-[#FEF1F3]/40 border border-[#DCEBED] hover:border-[#E94B68] cursor-pointer flex items-center justify-between group transition-colors"
                   >
                     <div>
-                      <div className="text-xs font-semibold text-slate-900 flex items-center gap-2">
-                        <span className="font-mono text-red-600 bg-red-100 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                      <div className="text-xs font-bold text-[#18364A] flex items-center gap-2">
+                        <span className="font-mono text-[#E94B68] bg-[#FEF1F3] border border-[#FDC8D1] px-1.5 py-0.5 rounded text-[9px] font-bold">
                           {sos.id}
                         </span>
                         <span>{sos.emergencyTitle}</span>
                       </div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">
+                      <div className="text-[10.5px] text-[#708696] mt-0.5 font-mono">
                         {sos.locationName} • Triage: {sos.triageStatus.toUpperCase()}
                       </div>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-red-600" />
+                    <ChevronRight className="w-4 h-4 text-[#708696] group-hover:text-[#E94B68]" />
                   </div>
                 ))}
               </div>
@@ -257,9 +256,9 @@ export const SearchModal: React.FC<SearchModalProps> = ({
           {/* Shelters */}
           {matchingShelters.length > 0 && (
             <div className="pt-4">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono mb-2 flex items-center gap-1.5">
-                <Building className="w-3.5 h-3.5 text-indigo-500" />
-                Evacuation Shelters & Relief Camps
+              <div className="text-[10px] font-bold uppercase tracking-wider text-[#708696] font-mono mb-2 flex items-center gap-1.5">
+                <Building className="w-3.5 h-3.5 text-[#075B8A]" />
+                <span>Evacuation Shelters & Relief Camps</span>
               </div>
               <div className="space-y-1.5">
                 {matchingShelters.map((sh) => (
@@ -269,15 +268,15 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                       onClose();
                       onNavigate('live-map');
                     }}
-                    className="p-2.5 rounded-xl hover:bg-slate-50 border border-slate-100 cursor-pointer flex items-center justify-between"
+                    className="p-3 rounded-2xl hover:bg-[#F4F8FA] border border-[#DCEBED] cursor-pointer flex items-center justify-between"
                   >
                     <div>
-                      <div className="text-xs font-medium text-slate-900">{sh.name}</div>
-                      <div className="text-[10px] text-slate-500">
+                      <div className="text-xs font-bold text-[#18364A]">{sh.name}</div>
+                      <div className="text-[10px] text-[#708696] font-mono">
                         {sh.district}, {sh.state} • Cap: {sh.capacityPersons}
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded">
+                    <span className="text-[9px] font-mono bg-[#EDFAFC] text-[#075B8A] border border-[#AEEBF0] px-2 py-0.5 rounded-full font-bold">
                       {sh.type}
                     </span>
                   </div>
@@ -288,7 +287,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-500 flex items-center justify-between font-mono">
+        <div className="px-5 py-3 bg-[#F4F8FA] border-t border-[#DCEBED] text-[10px] text-[#708696] flex items-center justify-between font-mono">
           <span>Navigate with ↵ or click item</span>
           <span>Index: 8 Hazards • 28 States • 4 SOS • 8 Shelters</span>
         </div>

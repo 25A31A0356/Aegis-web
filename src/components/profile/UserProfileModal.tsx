@@ -140,7 +140,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
               {/* Top Header Bar */}
               <div className="px-5 pt-4 pb-3 bg-white border-b border-slate-200 flex items-center justify-between sticky top-0 z-10">
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-mono font-bold text-[#0F5B66] uppercase tracking-widest bg-[#0F5B66]/10 px-2 py-0.5 rounded">
+                  <span className="text-[11px] font-mono font-bold text-[#075B8A] uppercase tracking-widest bg-[#075B8A]/10 px-2 py-0.5 rounded">
                     PREFERENCES
                   </span>
                 </div>
@@ -174,7 +174,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                     </span>
                     <button
                       onClick={handleOpenEditProfile}
-                      className="flex items-center gap-1 text-xs font-bold text-[#0F5B66] hover:text-[#0B444C] bg-[#0F5B66]/10 px-2.5 py-1 rounded-full hover:bg-[#0F5B66]/15 transition-all"
+                      className="flex items-center gap-1 text-xs font-bold text-[#075B8A] hover:text-[#0B6E9E] bg-[#075B8A]/10 px-2.5 py-1 rounded-full hover:bg-[#075B8A]/15 transition-all"
                     >
                       <Edit2 className="w-3 h-3" />
                       <span>Edit Profile</span>
@@ -186,7 +186,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                     onClick={handleOpenEditProfile}
                     className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs hover:border-slate-300 transition-all cursor-pointer flex items-center gap-3.5 group"
                   >
-                    <div className="w-13 h-13 rounded-full bg-[#0F5B66] text-white flex items-center justify-center font-black text-xl shadow-md shrink-0 ring-4 ring-[#0F5B66]/10">
+                    <div className="w-13 h-13 rounded-full bg-[#075B8A] text-white flex items-center justify-center font-black text-xl shadow-md shrink-0 ring-4 ring-[#075B8A]/10">
                       {avatarInitial}
                     </div>
 
@@ -213,7 +213,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                       )}
                     </div>
 
-                    <div className="w-8 h-8 rounded-full bg-[#0F5B66]/10 text-[#0F5B66] flex items-center justify-center group-hover:bg-[#0F5B66] group-hover:text-white transition-all shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-[#075B8A]/10 text-[#075B8A] flex items-center justify-center group-hover:bg-[#075B8A] group-hover:text-white transition-all shrink-0">
                       <ChevronRight className="w-4 h-4" />
                     </div>
                   </div>
@@ -233,7 +233,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                           {currentLanguage.native} • {currentLanguage.label}
                         </div>
                       </div>
-                      <div className="w-8 h-8 rounded-xl bg-[#0F5B66]/10 text-[#0F5B66] flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-xl bg-[#075B8A]/10 text-[#075B8A] flex items-center justify-center">
                         <Globe className="w-4 h-4" />
                       </div>
                     </div>
@@ -247,13 +247,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                             onClick={() => setLanguage(lang.code)}
                             className={`p-2.5 rounded-xl text-left border transition-all ${
                               isSelected
-                                ? 'bg-[#0F5B66]/10 border-[#0F5B66] shadow-xs'
+                                ? 'bg-[#075B8A]/10 border-[#075B8A] shadow-xs'
                                 : 'bg-slate-50 hover:bg-slate-100 border-slate-200'
                             }`}
                           >
                             <div
                               className={`text-xs font-bold leading-tight ${
-                                isSelected ? 'text-[#0F5B66]' : 'text-slate-800'
+                                isSelected ? 'text-[#075B8A]' : 'text-slate-800'
                               }`}
                             >
                               {lang.native}
@@ -292,7 +292,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                       <button
                         onClick={() => setColorScheme(colorScheme === 'dark' ? 'light' : 'dark')}
                         className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                          colorScheme === 'dark' ? 'bg-[#0F5B66]' : 'bg-slate-200'
+                          colorScheme === 'dark' ? 'bg-[#075B8A]' : 'bg-slate-200'
                         }`}
                       >
                         <div
@@ -344,7 +344,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                       <button
                         onClick={() => setLiveLocationEnabled(!liveLocationEnabled)}
                         className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                          liveLocationEnabled ? 'bg-[#0F5B66]' : 'bg-slate-200'
+                          liveLocationEnabled ? 'bg-[#075B8A]' : 'bg-slate-200'
                         }`}
                       >
                         <div
@@ -374,7 +374,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                           <Users className="w-4 h-4" />
                         </div>
                         <div>
-                          <div className="text-xs font-bold text-slate-900 group-hover:text-[#0F5B66] transition-colors flex items-center gap-1.5">
+                          <div className="text-xs font-bold text-slate-900 group-hover:text-[#075B8A] transition-colors flex items-center gap-1.5">
                             <span>Family Contacts</span>
                             <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full">
                               {profile.familyContacts.length}
@@ -396,7 +396,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                           <ShieldAlert className="w-4 h-4" />
                         </div>
                         <div>
-                          <div className="text-xs font-bold text-slate-900 group-hover:text-[#0F5B66] transition-colors">
+                          <div className="text-xs font-bold text-slate-900 group-hover:text-[#075B8A] transition-colors">
                             Permissions
                           </div>
                           <div className="text-[11px] text-slate-500">Location, photos, notifications</div>
@@ -415,7 +415,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                           <HelpCircle className="w-4 h-4" />
                         </div>
                         <div>
-                          <div className="text-xs font-bold text-slate-900 group-hover:text-[#0F5B66] transition-colors">
+                          <div className="text-xs font-bold text-slate-900 group-hover:text-[#075B8A] transition-colors">
                             Help Desk
                           </div>
                           <div className="text-[11px] text-slate-500">help@agiesalert.app</div>
@@ -436,7 +436,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                           <Smartphone className="w-4 h-4" />
                         </div>
                         <div>
-                          <div className="text-xs font-bold text-slate-900 group-hover:text-[#0F5B66] transition-colors flex items-center gap-1.5">
+                          <div className="text-xs font-bold text-slate-900 group-hover:text-[#075B8A] transition-colors flex items-center gap-1.5">
                             <span>AEGIS Mobile App</span>
                             <span className="text-[10px] font-mono text-sky-600 bg-sky-100 px-1.5 py-0.2 rounded font-bold">
                               PORT 8081
@@ -474,7 +474,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                 </div>
                 <button
                   onClick={onClose}
-                  className="bg-[#0F5B66] hover:bg-[#0B444C] text-white font-bold px-4 py-2 rounded-xl transition-colors text-xs"
+                  className="bg-[#075B8A] hover:bg-[#0B6E9E] text-white font-bold px-4 py-2 rounded-xl transition-colors text-xs"
                 >
                   Done
                 </button>
@@ -489,13 +489,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
               <div className="px-5 pt-4 pb-3 border-b border-slate-200 flex items-center justify-between bg-white">
                 <button
                   onClick={() => setCurrentView('main')}
-                  className="flex items-center gap-1 text-xs font-bold text-[#0F5B66] hover:text-[#0B444C] py-1 px-2 rounded-lg hover:bg-slate-100"
+                  className="flex items-center gap-1 text-xs font-bold text-[#075B8A] hover:text-[#0B6E9E] py-1 px-2 rounded-lg hover:bg-slate-100"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   <span>Settings</span>
                 </button>
                 <div className="text-center">
-                  <span className="text-[10px] font-bold text-[#0F5B66] uppercase tracking-wider font-mono block">
+                  <span className="text-[10px] font-bold text-[#075B8A] uppercase tracking-wider font-mono block">
                     PERSONAL DETAILS
                   </span>
                   <h3 className="text-sm font-black text-slate-900">
@@ -522,7 +522,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                     value={tempName}
                     onChange={(e) => setTempName(e.target.value)}
                     placeholder="e.g. Aarav Sharma"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-medium focus:ring-2 focus:ring-[#0F5B66] focus:border-[#0F5B66] outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-medium focus:ring-2 focus:ring-[#075B8A] focus:border-[#075B8A] outline-none"
                   />
                 </div>
 
@@ -535,7 +535,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                     value={tempPhone}
                     onChange={(e) => setTempPhone(e.target.value)}
                     placeholder="+91 98765 00000"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-mono font-medium focus:ring-2 focus:ring-[#0F5B66] focus:border-[#0F5B66] outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-mono font-medium focus:ring-2 focus:ring-[#075B8A] focus:border-[#075B8A] outline-none"
                   />
                 </div>
 
@@ -575,7 +575,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                     value={tempPeople}
                     onChange={(e) => setTempPeople(e.target.value)}
                     placeholder="3"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-mono font-medium focus:ring-2 focus:ring-[#0F5B66] focus:border-[#0F5B66] outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-mono font-medium focus:ring-2 focus:ring-[#075B8A] focus:border-[#075B8A] outline-none"
                   />
                 </div>
 
@@ -588,7 +588,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                     value={tempMedical}
                     onChange={(e) => setTempMedical(e.target.value)}
                     placeholder="e.g. Diabetic, Asthma, Penicillin allergy"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-medium focus:ring-2 focus:ring-[#0F5B66] focus:border-[#0F5B66] outline-none leading-relaxed"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 text-xs font-medium focus:ring-2 focus:ring-[#075B8A] focus:border-[#075B8A] outline-none leading-relaxed"
                   />
                 </div>
 
@@ -598,7 +598,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                     className={`w-full py-3 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all ${
                       saveSuccess
                         ? 'bg-emerald-600 hover:bg-emerald-700'
-                        : 'bg-[#0F5B66] hover:bg-[#0B444C]'
+                        : 'bg-[#075B8A] hover:bg-[#0B6E9E]'
                     }`}
                   >
                     {saveSuccess ? (
@@ -624,7 +624,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
               <div className="px-5 pt-4 pb-3 border-b border-slate-200 flex items-center justify-between bg-white">
                 <button
                   onClick={() => setCurrentView('main')}
-                  className="flex items-center gap-1 text-xs font-bold text-[#0F5B66] hover:text-[#0B444C] py-1 px-2 rounded-lg hover:bg-slate-100"
+                  className="flex items-center gap-1 text-xs font-bold text-[#075B8A] hover:text-[#0B6E9E] py-1 px-2 rounded-lg hover:bg-slate-100"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   <span>Settings</span>
@@ -661,7 +661,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                           <span className="font-extrabold text-slate-900 truncate">
                             {contact.name}
                           </span>
-                          <span className="text-[10px] font-bold bg-[#0F5B66]/10 text-[#0F5B66] px-2 py-0.2 rounded-full">
+                          <span className="text-[10px] font-bold bg-[#075B8A]/10 text-[#075B8A] px-2 py-0.2 rounded-full">
                             {contact.relationship}
                           </span>
                           {contact.isPrimary && (
@@ -703,7 +703,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                 {!showAddContactForm ? (
                   <button
                     onClick={() => setShowAddContactForm(true)}
-                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-[#0F5B66]/40 text-[#0F5B66] hover:bg-[#0F5B66]/5 text-xs font-bold flex items-center justify-center gap-1.5 transition-all mt-3"
+                    className="w-full py-2.5 rounded-xl border-2 border-dashed border-[#075B8A]/40 text-[#075B8A] hover:bg-[#075B8A]/5 text-xs font-bold flex items-center justify-center gap-1.5 transition-all mt-3"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Add Emergency Contact</span>
@@ -721,7 +721,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                         placeholder="Contact Name *"
                         value={newContactName}
                         onChange={(e) => setNewContactName(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs outline-none focus:ring-1 focus:ring-[#0F5B66]"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs outline-none focus:ring-1 focus:ring-[#075B8A]"
                       />
                       <input
                         type="tel"
@@ -729,21 +729,21 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                         placeholder="Phone Number *"
                         value={newContactPhone}
                         onChange={(e) => setNewContactPhone(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono outline-none focus:ring-1 focus:ring-[#0F5B66]"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono outline-none focus:ring-1 focus:ring-[#075B8A]"
                       />
                       <input
                         type="text"
                         placeholder="Relationship (e.g. Spouse, Father)"
                         value={newContactRel}
                         onChange={(e) => setNewContactRel(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs outline-none focus:ring-1 focus:ring-[#0F5B66]"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs outline-none focus:ring-1 focus:ring-[#075B8A]"
                       />
                       <input
                         type="text"
                         placeholder="Notes (e.g. Senior citizen)"
                         value={newContactNotes}
                         onChange={(e) => setNewContactNotes(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs outline-none focus:ring-1 focus:ring-[#0F5B66]"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs outline-none focus:ring-1 focus:ring-[#075B8A]"
                       />
                     </div>
                     <div className="flex items-center justify-end gap-2 pt-1">
@@ -756,7 +756,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
                       </button>
                       <button
                         type="submit"
-                        className="px-4 py-1.5 rounded-lg bg-[#0F5B66] text-white text-xs font-bold hover:bg-[#0B444C]"
+                        className="px-4 py-1.5 rounded-lg bg-[#075B8A] text-white text-xs font-bold hover:bg-[#0B6E9E]"
                       >
                         Save Contact
                       </button>
@@ -773,7 +773,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
               <div className="px-5 pt-4 pb-3 border-b border-slate-200 flex items-center justify-between bg-white">
                 <button
                   onClick={() => setCurrentView('main')}
-                  className="flex items-center gap-1 text-xs font-bold text-[#0F5B66] hover:text-[#0B444C] py-1 px-2 rounded-lg hover:bg-slate-100"
+                  className="flex items-center gap-1 text-xs font-bold text-[#075B8A] hover:text-[#0B6E9E] py-1 px-2 rounded-lg hover:bg-slate-100"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   <span>Settings</span>
@@ -834,7 +834,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
               <div className="px-5 pt-4 pb-3 border-b border-slate-200 flex items-center justify-between bg-white">
                 <button
                   onClick={() => setCurrentView('main')}
-                  className="flex items-center gap-1 text-xs font-bold text-[#0F5B66] hover:text-[#0B444C] py-1 px-2 rounded-lg hover:bg-slate-100"
+                  className="flex items-center gap-1 text-xs font-bold text-[#075B8A] hover:text-[#0B6E9E] py-1 px-2 rounded-lg hover:bg-slate-100"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   <span>Settings</span>

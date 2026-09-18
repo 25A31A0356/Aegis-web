@@ -229,7 +229,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold shadow-xs transition-all active:scale-95 group"
               title="Open AGIES Settings & Emergency Profile"
             >
-              <div className="w-6 h-6 rounded-full bg-[#0F5B66] flex items-center justify-center text-white text-[11px] font-black shadow-xs">
+              <div className="w-6 h-6 rounded-full bg-[#075B8A] flex items-center justify-center text-white text-[11px] font-black shadow-xs">
                 {profile.fullName?.trim() ? profile.fullName.trim()[0].toUpperCase() : 'A'}
               </div>
               <div className="text-left hidden sm:block">
