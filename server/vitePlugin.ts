@@ -5,6 +5,7 @@
 
 import { Plugin } from 'vite';
 import { handleBackendApiRequest, HttpRequestContext } from './router';
+import { RealtimeHub } from './services/RealtimeHub';
 
 export function agiesBackendPlugin(): Plugin {
   return {
@@ -16,6 +17,43 @@ export function agiesBackendPlugin(): Plugin {
 
         if (!path.startsWith('/api')) {
           return next();
+        }
+
+        // Handle SSE stream request
+        const acceptHeader = (req.headers['accept'] as string) || '';
+        if (
+          (path === '/api/v1/events' || path === '/api/events/stream' || path === '/api/events') &&
+          acceptHeader.includes('text/event-stream')
+        ) {
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache, no-transform',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*',
+          });
+
+          // Send initial connection ACK
+          res.write(
+            `data: ${JSON.stringify({
+              id: `init-${Date.now()}`,
+              type: 'SYSTEM_HEARTBEAT',
+              timestamp: new Date().toISOString(),
+              data: { status: 'CONNECTED', serverTime: new Date().toISOString() },
+            })}\n\n`
+          );
+
+          const unsubscribe = RealtimeHub.subscribe((event) => {
+            try {
+              res.write(`data: ${JSON.stringify(event)}\n\n`);
+            } catch (err) {
+              console.error('[SSE Write Error]', err);
+            }
+          });
+
+          req.on('close', () => {
+            unsubscribe();
+          });
+          return;
         }
 
         // Parse query string

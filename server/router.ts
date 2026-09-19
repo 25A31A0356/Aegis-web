@@ -18,7 +18,7 @@ import { ReportService } from './services/ReportService';
 import { LocationService } from './services/LocationService';
 import { MapService } from './services/MapService';
 import { AIService } from './services/AIService';
-import { NotificationService } from './services/NotificationService';
+import { RealtimeHub } from './services/RealtimeHub';
 import { SAFETY_GUIDES } from '../src/data/safetyGuidesData';
 
 export interface HttpRequestContext {
@@ -116,6 +116,9 @@ export async function handleBackendApiRequest(req: HttpRequestContext): Promise<
           weather: '/api/weather',
           alerts: '/api/alerts',
           nearbyAlerts: '/api/alerts/nearby',
+          activity: '/api/v1/activity',
+          events: '/api/v1/events',
+          eventsPoll: '/api/events/poll',
           mapLayers: '/api/map/layers',
           mapEvents: '/api/map/events',
           reports: '/api/reports',
@@ -441,6 +444,70 @@ export async function handleBackendApiRequest(req: HttpRequestContext): Promise<
         return { status: err.status, headers: attachHeaders(), body: err.body };
       }
       const res = ErrorHandler.createResponse({ id, deleted: true });
+      return { status: res.status, headers: attachHeaders(), body: res.body };
+    }
+
+    // -------------------------------------------------------------
+    // GET /api/v1/activity or GET /api/activity
+    // Real-time Unified Intelligence & Community Activity Feed
+    // -------------------------------------------------------------
+    if (method === 'GET' && (path === '/api/v1/activity' || path === '/api/activity')) {
+      const limit = query.limit ? parseInt(query.limit, 10) : 50;
+      const communityStream = await ReportService.getActivityStream(limit);
+      const alerts = await AlertService.getAlerts();
+
+      const officialAlertActivities = alerts.map((a) => {
+        const publishedTime = new Date(a.source.publishedAt).getTime();
+        const diffMins = Math.max(1, Math.round((Date.now() - publishedTime) / 60000));
+        const relTime = diffMins < 60 ? `${diffMins} min${diffMins > 1 ? 's' : ''} ago` : `${Math.round(diffMins / 60)} hr ago`;
+
+        return {
+          id: a.id,
+          trackingId: a.source.bulletinId || a.id,
+          timestamp: a.source.publishedAt,
+          relativeTime: relTime,
+          category: 'official_alert',
+          hazardCategory: a.category,
+          scope: 'india',
+          title: a.title,
+          description: a.description || a.headline,
+          severity: a.severity,
+          sourceAgency: a.source.agency,
+          sourceType: 'official',
+          locationTag: `${a.location.district || a.location.city || 'Regional'}, ${a.location.state}`,
+          coordinates: a.location.coordinates,
+          metricsBadge: a.metrics?.intensity || 'Official Bulletin',
+          isVerified: true,
+          status: a.status,
+          actionUrl: `/alerts?alertId=${a.id}`,
+        };
+      });
+
+      const combined = [...communityStream, ...officialAlertActivities]
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, limit);
+
+      const res = ErrorHandler.createResponse({
+        activities: combined,
+        total: combined.length,
+        serverTime: new Date().toISOString(),
+      });
+      return { status: res.status, headers: attachHeaders(), body: res.body };
+    }
+
+    // -------------------------------------------------------------
+    // GET /api/v1/events or GET /api/events/poll
+    // Real-time Event Hub History / Polling Gateway
+    // -------------------------------------------------------------
+    if (method === 'GET' && (path === '/api/v1/events' || path === '/api/events/poll' || path === '/api/events/stream')) {
+      const since = query.since ? SanitizationMiddleware.stripHtmlTags(query.since) : undefined;
+      const events = RealtimeHub.getEventsSince(since);
+      const res = ErrorHandler.createResponse({
+        events,
+        total: events.length,
+        subscriberCount: RealtimeHub.getSubscriberCount(),
+        serverTime: new Date().toISOString(),
+      });
       return { status: res.status, headers: attachHeaders(), body: res.body };
     }
 

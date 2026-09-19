@@ -335,6 +335,8 @@ async function runSecurityTestSuite() {
 
   if (failed > 0) {
     process.exit(1);
+  } else {
+    process.exit(0);
   }
 }
 
@@ -342,3 +344,4 @@ runSecurityTestSuite().catch((err) => {
   console.error('Fatal test error:', err);
   process.exit(1);
 });
+

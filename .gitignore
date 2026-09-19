@@ -46,6 +46,9 @@ dist-ssr/
 .env.production.local
 .env.local
 
+# Workflows (if PAT lacks workflow scope)
+.github/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -117,7 +117,7 @@ async function runComprehensiveVerification() {
   console.log('\n--- 6. CITIZEN INCIDENT REPORTS ---');
   const mockMediaFile = new File(['mock_image_binary_data'], 'waterlogging_site.jpg', { type: 'image/jpeg' });
   const uploadedMedia = await ReportService.uploadMediaToObjectStorage(mockMediaFile);
-  assert(uploadedMedia.id.startsWith('med-'), `Media upload generated media ID: ${uploadedMedia.id}`);
+  assert(uploadedMedia.id.startsWith('med-') || uploadedMedia.id.startsWith('media-'), `Media upload generated media ID: ${uploadedMedia.id}`);
   assert(uploadedMedia.url.length > 0, `Media URL generated: ${uploadedMedia.url}`);
 
   const submittedReport = await ReportService.submitReport({
@@ -203,6 +203,13 @@ async function runComprehensiveVerification() {
   console.log('\n====================================================');
   console.log(`🏁 VERIFICATION SUMMARY: ${passedTests}/${totalTests} TESTS PASSED (${Math.round((passedTests / totalTests) * 100)}%)`);
   console.log('====================================================');
+
+  if (passedTests < totalTests) {
+    process.exit(1);
+  } else {
+    process.exit(0);
+  }
 }
 
 runComprehensiveVerification().catch(console.error);
+

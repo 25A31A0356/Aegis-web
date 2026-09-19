@@ -7,6 +7,7 @@ import { IncidentReportSubmission } from '../types/api';
 import { FileValidationMiddleware } from '../middleware/fileValidationMiddleware';
 import { SanitizationMiddleware } from '../middleware/sanitizationMiddleware';
 import { AuditLogger } from './AuditLogger';
+import { RealtimeHub } from './RealtimeHub';
 
 export interface IncidentReportRecord {
   id: string;
@@ -129,6 +130,14 @@ export class ReportService {
       },
     });
 
+    // Realtime broadcast to all connected App & Web clients
+    RealtimeHub.broadcast({
+      id: `evt-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      type: 'REPORT_CREATED',
+      timestamp: new Date().toISOString(),
+      data: newRecord,
+    });
+
     return newRecord;
   }
 
@@ -137,6 +146,38 @@ export class ReportService {
    */
   public static async getReports(limit: number = 50): Promise<IncidentReportRecord[]> {
     return this.reports.slice(0, limit);
+  }
+
+  /**
+   * Generates unified activity stream combining official alerts and community reports
+   */
+  public static async getActivityStream(limit: number = 50): Promise<any[]> {
+    const communityActivities = this.reports.map((r) => {
+      const diffMins = Math.max(1, Math.round((Date.now() - new Date(r.submittedAt).getTime()) / 60000));
+      const relTime = diffMins < 60 ? `${diffMins} min${diffMins > 1 ? 's' : ''} ago` : `${Math.round(diffMins / 60)} hr ago`;
+
+      return {
+        id: r.id,
+        trackingId: r.trackingId,
+        timestamp: r.submittedAt,
+        relativeTime: relTime,
+        category: 'incident_detected',
+        scope: 'india',
+        title: r.title,
+        description: r.description,
+        severity: r.severity,
+        sourceAgency: 'Citizen Intelligence Network',
+        sourceType: 'community',
+        locationTag: `${r.location.city}, ${r.location.state}`,
+        coordinates: [r.location.lat, r.location.lng],
+        metricsBadge: r.status === 'verified' ? 'Verified by Ops' : r.status === 'dispatched' ? 'Dispatched' : 'Pending Review',
+        isVerified: r.status === 'verified' || r.status === 'dispatched',
+        status: r.status,
+        actionUrl: `/live-map?reportId=${r.trackingId}`,
+      };
+    });
+
+    return communityActivities.slice(0, limit);
   }
 
   /**

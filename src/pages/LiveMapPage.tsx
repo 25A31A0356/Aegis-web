@@ -6,6 +6,8 @@ import { SavedLocationsList } from '../components/livemap/SavedLocationsList';
 import { NearbyActivityFeed } from '../components/livemap/NearbyActivityFeed';
 import { useLocation } from '../context/LocationContext';
 import { LocationService, SavedLocationItem, NearbyActivityItem } from '../services/locationService';
+import { RealtimeService, RealtimeEvent } from '../services/realtimeService';
+import { ApiClient } from '../services/apiClient';
 
 interface LiveMapPageProps {
   onNavigate: (tab: string) => void;
@@ -34,16 +36,110 @@ export const LiveMapPage: React.FC<LiveMapPageProps> = ({
   const [isRadarPlaying, setIsRadarPlaying] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  // Nearby Activity & Map Hazard Pins
+  // Nearby Activity & Map Hazard Pins (deduplicated by ID)
   const [nearbyActivities, setNearbyActivities] = useState<NearbyActivityItem[]>(() =>
     LocationService.getNearbyActivity(currentCenter)
   );
   const [selectedHazard, setSelectedHazard] = useState<NearbyActivityItem | null>(null);
 
+  // Helper to convert community report into NearbyActivityItem
+  const convertReportToNearbyItem = (rep: any, center: [number, number]): NearbyActivityItem | null => {
+    if (!rep || !rep.location?.lat || !rep.location?.lng) return null;
+    const dist = LocationService.calculateDistanceKm(center, [rep.location.lat, rep.location.lng]);
+
+    return {
+      id: rep.trackingId || rep.id,
+      hazardType: rep.hazardType || 'Other',
+      title: rep.title || `Citizen Incident: ${rep.hazardType}`,
+      locationName: `${rep.location.address || rep.location.city || 'Local Sector'}, ${rep.location.state || 'India'}`,
+      distanceKm: dist,
+      timestamp: rep.submittedAt ? new Date(rep.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+      severity: rep.severity === 'critical' ? 'Critical' : rep.severity === 'high' ? 'Warning' : 'Watch',
+      coordinates: [rep.location.lat, rep.location.lng],
+      source: `Citizen Report (${rep.trackingId || 'Verified'})`,
+      status: rep.status === 'verified' ? 'Verified by Ops' : rep.status === 'dispatched' ? 'Dispatched' : 'Pending Review',
+      recommendedAction: rep.description || 'Proceed with caution in vicinity.',
+      safetyGuideSlug: 'floods',
+    };
+  };
+
+  const loadAndMergeActivities = async (center: [number, number]) => {
+    const baseItems = LocationService.getNearbyActivity(center);
+
+    try {
+      const reports = await ApiClient.get<any[]>('/reports', { limit: 50 }, { skipCache: true, timeoutMs: 3500 });
+      if (Array.isArray(reports)) {
+        const reportItems: NearbyActivityItem[] = [];
+        reports.forEach((rep) => {
+          const item = convertReportToNearbyItem(rep, center);
+          if (item) reportItems.push(item);
+        });
+
+        // Merge and deduplicate by item.id
+        const map = new Map<string, NearbyActivityItem>();
+        [...reportItems, ...baseItems].forEach((it) => {
+          if (!map.has(it.id)) {
+            map.set(it.id, it);
+          }
+        });
+
+        setNearbyActivities(Array.from(map.values()));
+        return;
+      }
+    } catch {
+      // quiet fallback
+    }
+
+    setNearbyActivities(baseItems);
+  };
+
   // Synchronize nearby activities whenever center coordinates change
   useEffect(() => {
-    setNearbyActivities(LocationService.getNearbyActivity(currentCenter));
+    loadAndMergeActivities(currentCenter);
   }, [currentCenter[0], currentCenter[1]]);
+
+  // Listen for real-time community report broadcasts
+  useEffect(() => {
+    const unsubReportCreated = RealtimeService.on('REPORT_CREATED', (evt: RealtimeEvent) => {
+      const rep = evt.data;
+      const item = convertReportToNearbyItem(rep, currentCenter);
+      if (item) {
+        setNearbyActivities((prev) => {
+          const filtered = prev.filter((p) => p.id !== item.id);
+          return [item, ...filtered];
+        });
+      }
+    });
+
+    const unsubReportUpdated = RealtimeService.on('REPORT_UPDATED', (evt: RealtimeEvent) => {
+      const rep = evt.data;
+      const item = convertReportToNearbyItem(rep, currentCenter);
+      if (item) {
+        setNearbyActivities((prev) => {
+          return prev.map((p) => (p.id === item.id ? item : p));
+        });
+      }
+    });
+
+    return () => {
+      unsubReportCreated();
+      unsubReportUpdated();
+    };
+  }, [currentCenter]);
+
+  // Check URL param ?reportId=... or ?hazardId=... to auto-focus pin
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetReportId = urlParams.get('reportId') || urlParams.get('hazardId');
+
+    if (targetReportId && nearbyActivities.length > 0) {
+      const matched = nearbyActivities.find((a) => a.id === targetReportId || a.id.includes(targetReportId));
+      if (matched) {
+        setSelectedHazard(matched);
+      }
+    }
+  }, [nearbyActivities]);
 
   const handleSelectSavedLocation = (loc: SavedLocationItem) => {
     selectLocationItem(loc);
@@ -61,12 +157,12 @@ export const LiveMapPage: React.FC<LiveMapPageProps> = ({
     await requestCurrentGPS();
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true);
+    await loadAndMergeActivities(currentCenter);
     setTimeout(() => {
-      setNearbyActivities(LocationService.getNearbyActivity(currentCenter));
       setIsRefreshing(false);
-    }, 600);
+    }, 500);
   };
 
   const handleViewSafetyGuide = (slug: string) => {
@@ -77,7 +173,7 @@ export const LiveMapPage: React.FC<LiveMapPageProps> = ({
     <div className="max-w-[1720px] mx-auto space-y-6 font-sans">
       {/* 1. Page Header with Title, Subtitle, and Live Status Pill */}
       <LiveMapHeader
-        lastUpdated="Updated 2 min ago"
+        lastUpdated="Telemetry Synchronized"
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
       />
