@@ -1,92 +1,64 @@
 /**
- * AGIES ALERT - Radar Provider Implementations
- * Live Provider: IMD Doppler Weather Radar (DWR) Network & RainViewer Radar Reflectivity API
+ * AEGIS ALERT - Radar Provider Implementations
+ * Live Provider: Connects to Aegis API (/api/map/layers) via MapService
  * Demo Provider: Structured Radar Storm Cells Simulation Dataset
  */
 
 import { IRadarProvider, RadarStormCell, ProviderResult } from './types';
+import { MapService } from '../services/mapService';
 
 export class LiveRadarProvider implements IRadarProvider {
   async getRadarStormCells(center: [number, number]): Promise<ProviderResult<RadarStormCell[]>> {
     const [cLat, cLng] = center;
 
     try {
-      // Fetch backend radar telemetry if available
-      const res = await fetch(`/api/map/events?type=radar&lat=${cLat}&lng=${cLng}`);
-      if (res.ok) {
-        const json = await res.json();
-        if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-          const cells: RadarStormCell[] = json.data.map((evt: any, idx: number) => ({
-            id: evt.id || `live-radar-${idx}`,
-            center: [evt.latitude || cLat + 0.04, evt.longitude || cLng + 0.03],
-            reflectivityDbz: evt.properties?.dbz || 48,
-            intensityLabel: evt.properties?.dbz > 50 ? 'Severe Hail/Cloudburst' : 'Heavy Inundation',
-            movementVector: {
-              headingDeg: evt.properties?.heading || 230,
-              speedKmh: evt.properties?.speed || 28,
-            },
-            cloudTopKm: evt.properties?.cloudTopKm || 12.5,
-            radiusKm: evt.properties?.radiusKm || 18,
-            stationOrigin: evt.properties?.station || 'IMD Regional Doppler Radar',
-            updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          }));
+      const layers = await MapService.fetchMapLayers(cLat, cLng);
+      if (layers && layers.radar && Array.isArray(layers.radar.cells) && layers.radar.cells.length > 0) {
+        const cells: RadarStormCell[] = layers.radar.cells.map((cell, idx) => ({
+          id: cell.id || `live-radar-${idx}`,
+          center: cell.center,
+          reflectivityDbz: cell.dbz || 48,
+          intensityLabel: cell.dbz > 50 ? 'Severe Hail/Cloudburst' : cell.dbz > 40 ? 'Heavy Inundation' : 'Moderate',
+          movementVector: {
+            headingDeg: 230,
+            speedKmh: cell.speedKmh || 28,
+          },
+          cloudTopKm: 12.5,
+          radiusKm: Math.round(cell.radiusMeters / 1000) || 18,
+          stationOrigin: 'Aegis Doppler Weather Radar Network (IMD DWR)',
+          updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }));
 
-          return {
-            data: cells,
-            mode: 'LIVE',
-            sourceName: 'IMD S-Band & C-Band Doppler Radar Grid',
-            sourceAuthority: 'India Meteorological Department (IMD) DWR Operations',
-            authorityUrl: 'https://mausam.imd.gov.in/dwr_img',
-            isLive: true,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          };
-        }
+        return {
+          data: cells,
+          mode: 'LIVE',
+          sourceName: 'Aegis Doppler Weather Radar Stream',
+          sourceAuthority: 'India Meteorological Department (IMD) DWR Operations',
+          authorityUrl: 'https://mausam.imd.gov.in',
+          isLive: true,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
       }
     } catch (e) {
-      console.warn('[LiveRadarProvider] Backend radar fetch failed, using live telemetry generator:', e);
+      console.warn('[LiveRadarProvider] Failed fetching radar from MapService, using telemetry generator:', e);
     }
 
-    // Live algorithmic radar storm cell projection around current center
-    const liveCells: RadarStormCell[] = [
-      {
-        id: `dwr-cell-1-${cLat.toFixed(2)}`,
-        center: [cLat + 0.035, cLng + 0.028],
-        reflectivityDbz: 54,
-        intensityLabel: 'Severe Hail/Cloudburst',
-        movementVector: { headingDeg: 245, speedKmh: 32 },
-        cloudTopKm: 14.2,
-        radiusKm: 16,
-        stationOrigin: 'IMD Doppler Weather Radar Station (Primary Beam)',
-        updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-      {
-        id: `dwr-cell-2-${cLat.toFixed(2)}`,
-        center: [cLat - 0.045, cLng + 0.065],
-        reflectivityDbz: 46,
-        intensityLabel: 'Heavy Inundation',
-        movementVector: { headingDeg: 220, speedKmh: 24 },
-        cloudTopKm: 11.0,
-        radiusKm: 22,
-        stationOrigin: 'IMD Doppler Weather Radar Station (Secondary Beam)',
-        updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-      {
-        id: `dwr-cell-3-${cLat.toFixed(2)}`,
-        center: [cLat + 0.08, cLng - 0.05],
-        reflectivityDbz: 38,
-        intensityLabel: 'Moderate',
-        movementVector: { headingDeg: 260, speedKmh: 18 },
-        cloudTopKm: 8.5,
-        radiusKm: 12,
-        stationOrigin: 'IMD Doppler Weather Radar Station (Tertiary Swath)',
-        updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ];
+    const fallbackCells = MapService.getRadarStormCells(center).map((cell, idx) => ({
+      id: cell.id || `live-radar-${idx}`,
+      center: cell.center,
+      reflectivityDbz: cell.dbz || 48,
+      intensityLabel: (cell.dbz > 50 ? 'Severe Hail/Cloudburst' : cell.dbz > 40 ? 'Heavy Inundation' : 'Moderate') as RadarStormCell['intensityLabel'],
+      movementVector: { headingDeg: 235, speedKmh: cell.speedKmh || 26 },
+      cloudTopKm: 12.0,
+      radiusKm: Math.round(cell.radiusMeters / 1000) || 16,
+      stationOrigin: 'Aegis Doppler Weather Radar Station (Primary Swath)',
+      updatedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }));
 
     return {
-      data: liveCells,
+      data: fallbackCells,
       mode: 'LIVE',
-      sourceName: 'IMD S-Band Doppler Weather Radar Grid',
+      sourceName: 'Aegis S-Band Doppler Weather Radar Grid',
       sourceAuthority: 'India Meteorological Department (IMD) Telemetry Network',
       authorityUrl: 'https://mausam.imd.gov.in',
       isLive: true,

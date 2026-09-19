@@ -72,8 +72,8 @@ class ProviderRegistryClass {
       }
     } catch {}
 
-    // Default to DEMO mode for safety until explicitly configured
-    this.currentMode = 'DEMO';
+    // Default to LIVE mode connected to Aegis centralized API
+    this.currentMode = 'LIVE';
   }
 
   public getDataMode(): DataMode {

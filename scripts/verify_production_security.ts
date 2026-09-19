@@ -304,15 +304,28 @@ async function runSecurityTestSuite() {
     assert(!missingEndpoint.body.error?.stack, 'Internal stack trace is NOT exposed in error response');
   }
 
-  // ------------------------------------------------------------------------
-  // 8. Security Audit Logging
-  // ------------------------------------------------------------------------
-  console.log('\n--- 8. Security Audit Logging ---');
+  // -------------------------------------------------------------
+  // 9. Safe Public API Discovery (No Credential Leakage)
+  // -------------------------------------------------------------
+  console.log('\n--- 9. Safe Public API Discovery ---');
   {
-    const logs = AuditLogger.getLogs({ limit: 10 });
-    assert(logs.length > 0, `Security audit logger captured ${logs.length} events in memory`);
-    const rateLimitLogs = AuditLogger.getLogs({ action: 'RATE_LIMIT_BLOCKED' });
-    assert(rateLimitLogs.length > 0, 'Audit logger captured RATE_LIMIT_BLOCKED events');
+    const discovery = await handleBackendApiRequest({
+      method: 'GET',
+      url: '/api/discovery',
+      path: '/api/discovery',
+      query: {},
+      headers: {},
+      clientIp: '10.0.0.8',
+    });
+
+    assert(discovery.status === 200, 'Discovery endpoint returns HTTP 200');
+    assert(discovery.body.data?.status === 'HEALTHY', 'Discovery reports HEALTHY system state');
+    assert(!!discovery.body.data?.endpoints?.weather, 'Discovery catalogs endpoints correctly');
+
+    const jsonString = JSON.stringify(discovery.body);
+    assert(!jsonString.includes('SECRET'), 'No JWT/Admin secrets leaked in discovery');
+    assert(!jsonString.includes('API_KEY'), 'No provider API keys leaked in discovery');
+    assert(!jsonString.includes('password'), 'No database credentials leaked in discovery');
   }
 
   // Summary

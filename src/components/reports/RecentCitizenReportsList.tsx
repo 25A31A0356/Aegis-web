@@ -23,8 +23,22 @@ interface RecentCitizenReportsListProps {
 export const RecentCitizenReportsList: React.FC<RecentCitizenReportsListProps> = ({
   onSelectReport,
 }) => {
-  const [reports] = useState<CitizenReport[]>(() => ReportService.getAllReports());
+  const [reports, setReports] = useState<CitizenReport[]>(() => ReportService.getAllReports());
   const [filter, setFilter] = useState<'all' | 'verified' | 'pending_review'>('all');
+
+  React.useEffect(() => {
+    let isMounted = true;
+    ReportService.fetchReportsFromApi().then((serverReports) => {
+      if (isMounted && serverReports && serverReports.length > 0) {
+        setReports(serverReports);
+      }
+    }).catch((err) => {
+      console.warn('[RecentCitizenReportsList] Failed to fetch server reports:', err);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const filtered = reports.filter((r) => {
     if (filter === 'all') return true;

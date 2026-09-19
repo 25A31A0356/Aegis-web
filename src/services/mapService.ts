@@ -1,7 +1,10 @@
 /**
- * AGIES Map Service - GIS & Technical Layers Abstraction
- * Handles tile providers (Satellite, Radar, Streets, Terrain), radar precipitation reflectivity contours, and lightning telemetry.
+ * AEGIS Map Service - GIS & Technical Layers Abstraction
+ * Handles tile providers (Satellite, Radar, Streets, Terrain), radar precipitation reflectivity contours,
+ * lightning strike telemetry, and evacuation shelters via the Aegis Software API (/api/map/events, /api/map/layers).
  */
+
+import { ApiClient } from './apiClient';
 
 export interface MapTileProvider {
   id: string;
@@ -29,8 +32,37 @@ export interface LightningStrike {
   type: 'cloud-to-ground' | 'intra-cloud';
 }
 
+export interface EvacuationShelter {
+  id: string;
+  name: string;
+  coordinates: [number, number];
+  capacity: number;
+  occupancy: number;
+  status: 'open' | 'standby' | 'full';
+}
+
+export interface MapLayersPayload {
+  radar: {
+    cells: RadarStormCell[];
+  };
+  lightning: {
+    strikes: LightningStrike[];
+  };
+  shelters: EvacuationShelter[];
+}
+
+export interface MapEventPoint {
+  id: string;
+  type: string;
+  title: string;
+  coordinates: [number, number];
+  severity: string;
+  status: string;
+  radiusMeters?: number;
+}
+
 class MapServiceClass {
-  // Safe Tile Providers (No secret keys embedded)
+  // Public Open Tile Providers (No secret keys embedded)
   private providers: Record<string, MapTileProvider> = {
     streets: {
       id: 'streets',
@@ -72,7 +104,54 @@ class MapServiceClass {
   }
 
   /**
-   * Generates dynamic Doppler radar storm clusters around the active coordinates
+   * Fetch active map GIS event pins from Aegis Software API (/api/map/events)
+   */
+  async fetchMapEvents(lat?: number, lng?: number): Promise<MapEventPoint[]> {
+    try {
+      const data = await ApiClient.get<MapEventPoint[]>('/map/events', {
+        lat: lat ? Number(lat.toFixed(4)) : undefined,
+        lng: lng ? Number(lng.toFixed(4)) : undefined,
+      });
+      if (Array.isArray(data) && data.length > 0) {
+        return data;
+      }
+    } catch (e) {
+      console.warn('[MapService] Failed to fetch /api/map/events:', e);
+    }
+    return this.getFallbackMapEvents(lat, lng);
+  }
+
+  /**
+   * Fetch Doppler radar, lightning and shelter layers from Aegis API (/api/map/layers)
+   */
+  async fetchMapLayers(lat?: number, lng?: number): Promise<MapLayersPayload> {
+    try {
+      const data = await ApiClient.get<MapLayersPayload>('/map/layers', {
+        lat: lat ? Number(lat.toFixed(4)) : undefined,
+        lng: lng ? Number(lng.toFixed(4)) : undefined,
+      });
+      if (data && data.radar && data.lightning) {
+        return data;
+      }
+    } catch (e) {
+      console.warn('[MapService] Failed to fetch /api/map/layers:', e);
+    }
+
+    const cLat = lat || 19.0760;
+    const cLng = lng || 72.8777;
+    return {
+      radar: {
+        cells: this.getRadarStormCells([cLat, cLng]),
+      },
+      lightning: {
+        strikes: this.getRegionalLightningStrikes([cLat, cLng]),
+      },
+      shelters: this.getFallbackShelters([cLat, cLng]),
+    };
+  }
+
+  /**
+   * Generates Doppler radar storm clusters around the active coordinates
    */
   getRadarStormCells(center: [number, number]): RadarStormCell[] {
     const [lat, lng] = center;
@@ -149,6 +228,62 @@ class MapServiceClass {
         timestamp: '5 min ago',
         peakCurrentKa: -55,
         type: 'cloud-to-ground',
+      },
+    ];
+  }
+
+  getFallbackShelters(center: [number, number]): EvacuationShelter[] {
+    const [lat, lng] = center;
+    return [
+      {
+        id: 'sh-1',
+        name: 'District Multi-Purpose Cyclone Shelter',
+        coordinates: [lat - 0.02, lng + 0.04],
+        capacity: 1500,
+        occupancy: 320,
+        status: 'open',
+      },
+      {
+        id: 'sh-2',
+        name: 'Municipal Relief & Medical Center',
+        coordinates: [lat + 0.05, lng - 0.03],
+        capacity: 2000,
+        occupancy: 850,
+        status: 'open',
+      },
+    ];
+  }
+
+  getFallbackMapEvents(lat?: number, lng?: number): MapEventPoint[] {
+    const cLat = lat || 19.0760;
+    const cLng = lng || 72.8777;
+    return [
+      {
+        id: 'evt-1',
+        type: 'Flood',
+        title: 'Lowland Inundation Cluster',
+        coordinates: [cLat + 0.04, cLng + 0.03],
+        severity: 'Critical',
+        status: 'Active Red Alert',
+        radiusMeters: 4500,
+      },
+      {
+        id: 'evt-2',
+        type: 'Lightning',
+        title: 'Severe Lightning Zone',
+        coordinates: [cLat + 0.075, cLng + 0.055],
+        severity: 'Warning',
+        status: 'Active Discharge',
+        radiusMeters: 2500,
+      },
+      {
+        id: 'evt-3',
+        type: 'Road Blockage',
+        title: 'Highway Obstruction & Tree Fall',
+        coordinates: [cLat - 0.03, cLng + 0.02],
+        severity: 'Warning',
+        status: 'Diversion in Place',
+        radiusMeters: 1000,
       },
     ];
   }

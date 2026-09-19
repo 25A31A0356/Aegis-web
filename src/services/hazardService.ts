@@ -1,7 +1,21 @@
-import { HazardItem, HazardCategory, HazardSeverity, HazardNature, HazardStatus } from '../types/hazard';
+/**
+ * AEGIS ALERT - Frontend Hazard Service
+ * Connects exclusively to the Aegis Software API (/api/alerts and /api/alerts/nearby) via ApiClient.
+ * Normalizes multi-hazard alerts (Weather, Flood, Earthquake, Cyclone, Wildfire, Heatwave, Heavy Rain, Storm, Emergency).
+ * Strictly filters out expired or resolved hazards from active displays.
+ * Zero external browser API keys or direct third-party vendor calls.
+ */
+
+import { ApiClient } from './apiClient';
+import {
+  HazardItem,
+  HazardCategory,
+  HazardSeverity,
+  HazardNature,
+  HazardStatus,
+  TimelineEvent,
+} from '../types/hazard';
 import { DEMO_HAZARDS } from '../data/demoHazards';
-import { DEMO_STATES } from '../data/demoStates';
-import { CITY_COORDINATES } from './weatherService';
 
 export interface HazardFilterOptions {
   searchQuery?: string;
@@ -13,390 +27,341 @@ export interface HazardFilterOptions {
   isHumanMade?: boolean | 'all';
 }
 
+interface BackendAlertItem {
+  id: string;
+  title: string;
+  category: string;
+  categoryName?: string;
+  severity: 'critical' | 'warning' | 'moderate' | 'minor';
+  status: 'active' | 'monitoring' | 'resolved';
+  headline: string;
+  description: string;
+  location: {
+    state: string;
+    district: string;
+    city?: string;
+    coordinates: [number, number];
+    radiusKm: number;
+    affectedZones?: string[];
+  };
+  source: {
+    agency: string;
+    bulletinId: string;
+    publishedAt: string;
+    validUntil: string;
+  };
+  metrics?: {
+    intensity?: string;
+    magnitudeRichter?: number;
+    windSpeedKmph?: number;
+    rainfallRateMmHr?: number;
+    heatIndexCelsius?: number;
+  };
+  timeline?: Array<{
+    time: string;
+    stage: string;
+    description: string;
+    source: string;
+  }>;
+  safetyAdvice?: Array<{
+    title: string;
+    instruction: string;
+    urgent: boolean;
+  }>;
+  emergencyContacts?: Array<{
+    name: string;
+    phone: string;
+  }>;
+  recommendedAction?: string;
+  safetyGuideSlug?: string;
+}
+
 export class HazardService {
-  private static hazards: HazardItem[] = [...DEMO_HAZARDS];
+  private static hazards: HazardItem[] = [];
   private static isInitialized = false;
   private static listeners: Array<() => void> = [];
+  private static lastFetchedAt = 0;
 
   /**
-   * Initializes and polls authentic live natural hazards from USGS Seismology & Open-Meteo Real Data
+   * Normalizes backend AlertItem to frontend HazardItem
    */
-  public static async fetchLiveHazards(): Promise<HazardItem[]> {
+  public static normalizeAlert(alert: BackendAlertItem): HazardItem {
+    const rawCategory = (alert.category || 'weather').toLowerCase();
+    let category: HazardCategory = 'thunderstorm';
+    let categoryName = alert.categoryName || 'Disaster Alert';
+
+    if (rawCategory.includes('flood') || rawCategory.includes('inundation')) {
+      category = rawCategory.includes('flash') ? 'flash_flood' : 'flood';
+      categoryName = 'Flood & River Surge';
+    } else if (rawCategory.includes('cyclone') || rawCategory.includes('storm')) {
+      category = 'cyclone';
+      categoryName = 'Cyclone & High Wind';
+    } else if (rawCategory.includes('earthquake') || rawCategory.includes('seismic')) {
+      category = 'earthquake';
+      categoryName = 'Seismic Activity';
+    } else if (rawCategory.includes('fire') || rawCategory.includes('wildfire')) {
+      category = 'wildfire';
+      categoryName = 'Wildfire & Fire Threat';
+    } else if (rawCategory.includes('heat') || rawCategory.includes('temperature')) {
+      category = 'heatwave';
+      categoryName = 'Heatwave & Extreme Temp';
+    } else if (rawCategory.includes('landslide') || rawCategory.includes('mudslide')) {
+      category = 'landslide';
+      categoryName = 'Landslide & Slip Debris';
+    } else if (rawCategory.includes('heavy_rain') || rawCategory.includes('rain')) {
+      category = 'flash_flood';
+      categoryName = 'Heavy Rainfall Watch';
+    } else if (rawCategory.includes('emergency') || rawCategory.includes('human')) {
+      category = 'building_collapse';
+      categoryName = 'Emergency Incident';
+    }
+
+    const publishedDate = new Date(alert.source.publishedAt);
+    const validUntilDate = new Date(alert.source.validUntil);
+    const now = new Date();
+
+    // Determine status: if expired, mark resolved
+    let status: HazardStatus = alert.status || 'active';
+    if (validUntilDate.getTime() < now.getTime() && status === 'active') {
+      status = 'resolved';
+    }
+
+    const nature: HazardNature = alert.severity === 'critical' ? 'incident' : alert.severity === 'warning' ? 'warning' : 'forecast';
+
+    const normalizedTimeline: TimelineEvent[] = alert.timeline && alert.timeline.length > 0
+      ? alert.timeline.map((t) => ({
+          time: t.time,
+          stage: (t.stage === 'Warning Upgraded' || t.stage === 'Risk Detected' || t.stage === 'Advisory Issued' || t.stage === 'Incident Reported' || t.stage === 'Response Deployed' || t.stage === 'Contained' || t.stage === 'All Clear')
+            ? t.stage
+            : 'Warning Upgraded',
+          description: t.description,
+          source: t.source,
+        }))
+      : [
+          {
+            time: 'Live Stream',
+            stage: 'Advisory Issued',
+            description: alert.headline || alert.description,
+            source: alert.source.agency,
+          },
+        ];
+
+    return {
+      id: alert.id,
+      title: alert.title,
+      category,
+      categoryName,
+      isHumanMade: false,
+      nature,
+      severity: alert.severity || 'warning',
+      status,
+      headline: alert.headline || alert.description.slice(0, 120),
+      description: alert.description,
+      location: {
+        state: alert.location.state,
+        district: alert.location.district,
+        city: alert.location.city || alert.location.district,
+        coordinates: alert.location.coordinates,
+        radiusKm: alert.location.radiusKm || 30,
+        affectedZones: alert.location.affectedZones || [alert.location.district, `${alert.location.state} Sector`],
+      },
+      source: {
+        agency: alert.source.agency,
+        bulletinId: alert.source.bulletinId,
+        publishedAt: isNaN(publishedDate.getTime()) ? alert.source.publishedAt : publishedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' IST',
+        validUntil: isNaN(validUntilDate.getTime()) ? alert.source.validUntil : validUntilDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' IST',
+      },
+      metrics: {
+        intensity: alert.metrics?.intensity || `${alert.severity.toUpperCase()} Priority`,
+        magnitudeRichter: alert.metrics?.magnitudeRichter,
+        windSpeedKmph: alert.metrics?.windSpeedKmph,
+        heatIndexCelsius: alert.metrics?.heatIndexCelsius,
+      },
+      timeline: normalizedTimeline,
+      safetyAdvice: alert.safetyAdvice && alert.safetyAdvice.length > 0
+        ? alert.safetyAdvice
+        : [
+            {
+              title: 'Adhere to Official Advisory',
+              instruction: alert.recommendedAction || 'Follow instructions from NDMA, IMD, and local civil defense authorities.',
+              urgent: alert.severity === 'critical',
+            },
+          ],
+      emergencyContacts: alert.emergencyContacts && alert.emergencyContacts.length > 0
+        ? alert.emergencyContacts
+        : [
+            { name: 'National Emergency Helpline', phone: '112' },
+            { name: 'National Disaster Helpline', phone: '1078' },
+          ],
+    };
+  }
+
+  /**
+   * Fetches live multi-hazard alerts from Aegis Software API
+   */
+  public static async fetchLiveHazards(filter?: HazardFilterOptions): Promise<HazardItem[]> {
     try {
-      const liveList: HazardItem[] = [];
+      const queryParams: Record<string, string | undefined> = {};
+      if (filter?.category && filter.category !== 'all') queryParams.category = filter.category;
+      if (filter?.severity && filter.severity !== 'all') queryParams.severity = filter.severity;
+      if (filter?.stateId && filter.stateId !== 'all') queryParams.stateId = filter.stateId;
 
-      // 1. Fetch Real Live USGS Earthquakes (2.5+ Magnitude)
-      try {
-        const usgsRes = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson', {
-          headers: { Accept: 'application/json' },
-        });
-        if (usgsRes.ok) {
-          const usgsData = await usgsRes.json();
-          const features = usgsData.features || [];
+      const rawAlerts = await ApiClient.get<BackendAlertItem[]>('/alerts', queryParams);
 
-          for (const feat of features.slice(0, 15)) {
-            const coords = feat.geometry?.coordinates; // [lng, lat, depth]
-            if (!coords || coords.length < 2) continue;
-            const [lng, lat, depth] = coords;
-            const mag = feat.properties?.mag || 3.0;
-            const place = feat.properties?.place || 'Regional Epicenter';
-            const time = new Date(feat.properties?.time || Date.now());
-            const eventId = feat.id || `USGS-${Math.floor(Math.random() * 100000)}`;
-
-            // Restrict strictly to India sovereign territory & territorial waters (6°N-37.5°N, 68°E-97.5°E)
-            const isInIndia = lat >= 6.0 && lat <= 37.5 && lng >= 68.0 && lng <= 97.5;
-            if (!isInIndia) continue; // Do not display non-Indian foreign events
-
-            let severity: HazardSeverity = 'moderate';
-            if (mag >= 6.0) severity = 'critical';
-            else if (mag >= 4.5) severity = 'warning';
-            else if (mag < 3.5) severity = 'minor';
-
-            liveList.push({
-              id: `LIVE-EQ-${eventId}`,
-              title: `M${mag.toFixed(1)} Earthquake — ${place}`,
-              category: 'earthquake',
-              categoryName: 'Seismic Activity',
-              isHumanMade: false,
-              nature: 'incident',
-              severity,
-              status: 'monitoring',
-              headline: `National Seismological Network recorded a magnitude ${mag.toFixed(1)} event at depth ${depth || 10}km.`,
-              description: `Real-time seismic wave detection confirmed within India seismic zone. Coordinates: [${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E].`,
-              location: {
-                state: 'India',
-                district: place,
-                city: place.split(' of ').pop() || place,
-                coordinates: [lat, lng],
-                radiusKm: Math.round(mag * 30),
-                affectedZones: [place, `Depth ${depth || 10}km Epicentral Zone`],
-              },
-              source: {
-                agency: 'USGS National Earthquake Information Center',
-                bulletinId: `USGS-SEIS-${eventId.toUpperCase()}`,
-                publishedAt: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' UTC',
-                validUntil: 'Post-Event Seismic Relaxation (24h)',
-              },
-              metrics: {
-                intensity: `Richter Scale M${mag.toFixed(1)}`,
-                magnitudeRichter: Number(mag.toFixed(1)),
-              },
-              timeline: [
-                {
-                  time: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  stage: 'Incident Reported',
-                  description: `Primary P-waves and S-waves registered at automated seismic stations. Magnitude calculated at M${mag.toFixed(1)}.`,
-                  source: 'USGS Global Network',
-                },
-                {
-                  time: 'Live',
-                  stage: 'Response Deployed',
-                  description: 'Aftershock surveillance active across regional tectonic fracture zones.',
-                  source: 'AEGIS Seismic Sentinel',
-                },
-              ],
-              safetyAdvice: [
-                {
-                  title: 'Drop, Cover, and Hold On',
-                  instruction: 'If shaking is felt, take shelter under sturdy furniture immediately.',
-                  urgent: true,
-                },
-                {
-                  title: 'Inspect Structural Cracks',
-                  instruction: 'Avoid unreinforced masonry structures and check gas lines.',
-                  urgent: false,
-                },
-              ],
-              emergencyContacts: [
-                { name: 'National Emergency Helpline', phone: '112' },
-                { name: 'NDRF Seismological Control', phone: '1078' },
-              ],
-            });
-          }
-        }
-      } catch (err) {
-        console.warn('[HazardService] USGS Earthquake feed error:', err);
-      }
-
-      // 2. Fetch Live Open-Meteo Meteorological Hazards across Key Indian Metros
-      try {
-        const cities = Object.keys(CITY_COORDINATES);
-        for (const cKey of cities) {
-          const cfg = CITY_COORDINATES[cKey];
-          const mUrl = `https://api.open-meteo.com/v1/forecast?latitude=${cfg.lat}&longitude=${cfg.lng}&current=temperature_2m,precipitation,wind_speed_10m,wind_gusts_10m,weather_code&timezone=Asia%2FKolkata`;
-          const res = await fetch(mUrl, { headers: { Accept: 'application/json' } });
-          if (!res.ok) continue;
-
-          const data = await res.json();
-          const curr = data.current || {};
-          const temp = Math.round(curr.temperature_2m || 30);
-          const wind = Math.round(curr.wind_speed_10m || 10);
-          const gust = Math.round(curr.wind_gusts_10m || wind * 1.3);
-          const precip = Number(curr.precipitation || 0);
-
-          // Heatwave Hazard
-          if (temp >= 38) {
-            liveList.push({
-              id: `LIVE-HEAT-${cKey.toUpperCase()}`,
-              title: `Severe Thermal Heatwave Alert — ${cfg.cityName}`,
-              category: 'heatwave',
-              categoryName: 'Heatwave & Extreme Temp',
-              isHumanMade: false,
-              nature: 'warning',
-              severity: temp >= 42 ? 'critical' : 'warning',
-              status: 'active',
-              headline: `Real-time surface temperature recorded at ${temp}°C in ${cfg.cityName}, ${cfg.stateName}.`,
-              description: `Severe atmospheric heat dome conditions detected. Elevated risk of thermal fatigue, heat cramps, and dehydration.`,
-              location: {
-                state: cfg.stateName,
-                district: cfg.cityName,
-                city: cfg.cityName,
-                coordinates: [cfg.lat, cfg.lng],
-                radiusKm: 45,
-                affectedZones: [cfg.cityName, 'Metropolitan Area', 'Urban Core'],
-              },
-              source: {
-                agency: 'Open-Meteo High-Resolution NWP',
-                bulletinId: `HEAT-${cKey.toUpperCase()}-${new Date().toISOString().slice(0, 10)}`,
-                publishedAt: 'Real-Time Telemetry Stream',
-                validUntil: 'Today, 18:00 IST',
-              },
-              metrics: {
-                intensity: `Ambient ${temp}°C`,
-                heatIndexCelsius: temp,
-                windSpeedKmph: wind,
-              },
-              timeline: [
-                {
-                  time: 'Live Stream',
-                  stage: 'Warning Upgraded',
-                  description: `Ground temperature sensors cross threshold at ${temp}°C.`,
-                  source: 'Meteorological Ingestion Pipeline',
-                },
-              ],
-              safetyAdvice: [
-                {
-                  title: 'Hydration & Sun Exposure Limit',
-                  instruction: 'Avoid direct sunlight between 11:00 AM and 4:00 PM. Drink plenty of water.',
-                  urgent: true,
-                },
-              ],
-              emergencyContacts: [
-                { name: 'State Heatwave Medical Helpline', phone: '108' },
-                { name: 'Disaster Management Cell', phone: '1070' },
-              ],
-            });
-          }
-
-          // Rainfall / Inundation Hazard
-          if (precip >= 10) {
-            liveList.push({
-              id: `LIVE-RAIN-${cKey.toUpperCase()}`,
-              title: `Heavy Inundation & Precipitation Watch — ${cfg.cityName}`,
-              category: 'flash_flood',
-              categoryName: 'Flash Flood & Inundation',
-              isHumanMade: false,
-              nature: 'warning',
-              severity: precip >= 30 ? 'critical' : 'warning',
-              status: 'active',
-              headline: `Active rainfall of ${precip}mm recorded over ${cfg.cityName}. Catchment overflow warning active.`,
-              description: `Convective cloud mass generating localized high-intensity precipitation. Urban lowlands and underpasses at risk of waterlogging.`,
-              location: {
-                state: cfg.stateName,
-                district: cfg.cityName,
-                city: cfg.cityName,
-                coordinates: [cfg.lat, cfg.lng],
-                radiusKm: 30,
-                affectedZones: [cfg.cityName, 'Low-lying Drainage Basins'],
-              },
-              source: {
-                agency: 'Open-Meteo Radar & Hydrology',
-                bulletinId: `HYDRO-${cKey.toUpperCase()}-${new Date().toISOString().slice(0, 10)}`,
-                publishedAt: 'Real-Time Stream',
-                validUntil: 'Next 6 Hours',
-              },
-              metrics: {
-                rainfallMm: precip,
-                windSpeedKmph: wind,
-              },
-              timeline: [
-                {
-                  time: 'Live Stream',
-                  stage: 'Warning Upgraded',
-                  description: `Precipitation rate of ${precip}mm registered by radar extrapolation.`,
-                  source: 'Hydro-Meteorological Pipeline',
-                },
-              ],
-              safetyAdvice: [
-                {
-                  title: 'Avoid Waterlogged Corridors',
-                  instruction: 'Do not attempt to drive through flooded underpasses or swift-moving water.',
-                  urgent: true,
-                },
-              ],
-              emergencyContacts: [
-                { name: 'Flood Rescue Control Room', phone: '1070' },
-                { name: 'NDRF Search & Rescue', phone: '1078' },
-              ],
-            });
-          }
-
-          // High Wind / Gale Warning
-          if (wind >= 35 || gust >= 50) {
-            liveList.push({
-              id: `LIVE-WIND-${cKey.toUpperCase()}`,
-              title: `High Wind Vectors & Gale Advisory — ${cfg.cityName}`,
-              category: 'cyclone',
-              categoryName: 'Cyclone & High Wind',
-              isHumanMade: false,
-              nature: 'warning',
-              severity: wind >= 50 ? 'critical' : 'warning',
-              status: 'active',
-              headline: `Sustained surface winds of ${wind} km/h with gusts of ${gust} km/h recorded in ${cfg.cityName}.`,
-              description: `Strong pressure gradient generating gale-force wind gusts. Structural loose objects and power lines require monitoring.`,
-              location: {
-                state: cfg.stateName,
-                district: cfg.cityName,
-                city: cfg.cityName,
-                coordinates: [cfg.lat, cfg.lng],
-                radiusKm: 50,
-                affectedZones: [cfg.cityName, 'Open Coastal / Elevated Zones'],
-              },
-              source: {
-                agency: 'Open-Meteo Real Data Feed',
-                bulletinId: `GALE-${cKey.toUpperCase()}-${new Date().toISOString().slice(0, 10)}`,
-                publishedAt: 'Live Stream',
-                validUntil: 'Next 8 Hours',
-              },
-              metrics: {
-                windSpeedKmph: wind,
-              },
-              timeline: [
-                {
-                  time: 'Live Stream',
-                  stage: 'Risk Detected',
-                  description: `Anemometers confirm wind gust spike to ${gust} km/h.`,
-                  source: 'Atmospheric Sensor Network',
-                },
-              ],
-              safetyAdvice: [
-                {
-                  title: 'Secure Loose Outdoor Structures',
-                  instruction: 'Fasten loose tin roofs, signs, and stay clear of tall trees.',
-                  urgent: false,
-                },
-              ],
-              emergencyContacts: [
-                { name: 'Cyclone Emergency Command', phone: '1070' },
-                { name: 'Emergency Police & Rescue', phone: '112' },
-              ],
-            });
-          }
-        }
-      } catch (err) {
-        console.warn('[HazardService] Weather hazard generation error:', err);
-      }
-
-      // If we obtained live real hazards, update the primary list with real events first
-      if (liveList.length > 0) {
-        const existingReal = this.hazards.filter((h) => !h.id.startsWith('LIVE-'));
-        this.hazards = [...liveList, ...existingReal];
+      if (Array.isArray(rawAlerts) && rawAlerts.length > 0) {
+        const normalizedList = rawAlerts.map(this.normalizeAlert);
+        this.hazards = normalizedList;
+        this.lastFetchedAt = Date.now();
+        this.isInitialized = true;
         this.notifyListeners();
+        return this.filterHazards(filter);
       }
-
-      this.isInitialized = true;
-      return this.hazards;
     } catch (err) {
-      console.warn('[HazardService] Overall fetchLiveHazards failure:', err);
-      return this.hazards;
+      console.warn('[HazardService] Failed to fetch alerts from Aegis API, using baseline store:', err);
     }
-  }
 
-  public static getAllHazards(): HazardItem[] {
-    if (!this.isInitialized) {
-      this.fetchLiveHazards().catch(console.error);
+    if (this.hazards.length === 0) {
+      this.hazards = [...DEMO_HAZARDS];
+      this.isInitialized = true;
+      this.notifyListeners();
     }
-    return [...this.hazards];
+
+    return this.filterHazards(filter);
   }
 
-  public static getHazardById(id: string): HazardItem | undefined {
-    return this.hazards.find((h) => h.id === id);
-  }
+  /**
+   * Fetch nearby hazards around specific geographic coordinates from Aegis API
+   */
+  public static async getNearbyHazards(lat: number, lng: number, radiusKm: number = 100): Promise<HazardItem[]> {
+    try {
+      const rawAlerts = await ApiClient.get<BackendAlertItem[]>('/alerts/nearby', {
+        lat: Number(lat.toFixed(4)),
+        lng: Number(lng.toFixed(4)),
+        radiusKm,
+      });
 
-  public static filterHazards(options: HazardFilterOptions): HazardItem[] {
-    return this.hazards.filter((item) => {
-      if (options.searchQuery) {
-        const q = options.searchQuery.toLowerCase();
-        const matchTitle = item.title.toLowerCase().includes(q);
-        const matchHeadline = item.headline.toLowerCase().includes(q);
-        const matchState = item.location.state.toLowerCase().includes(q);
-        const matchDistrict = item.location.district.toLowerCase().includes(q);
-        const matchCategory = item.categoryName.toLowerCase().includes(q);
-        const matchAgency = item.source.agency.toLowerCase().includes(q);
-        if (!matchTitle && !matchHeadline && !matchState && !matchDistrict && !matchCategory && !matchAgency) {
-          return false;
-        }
+      if (Array.isArray(rawAlerts) && rawAlerts.length > 0) {
+        return rawAlerts.map(this.normalizeAlert).filter((h) => h.status !== 'resolved');
       }
+    } catch (e) {
+      console.warn('[HazardService] Nearby alerts API query failed:', e);
+    }
 
-      if (options.category && options.category !== 'all' && item.category !== options.category) {
-        return false;
-      }
-
-      if (options.severity && options.severity !== 'all' && item.severity !== options.severity) {
-        return false;
-      }
-
-      if (options.nature && options.nature !== 'all' && item.nature !== options.nature) {
-        return false;
-      }
-
-      if (options.status && options.status !== 'all' && item.status !== options.status) {
-        return false;
-      }
-
-      if (options.isHumanMade !== undefined && options.isHumanMade !== 'all') {
-        if (Boolean(item.isHumanMade) !== options.isHumanMade) {
-          return false;
-        }
-      }
-
-      if (options.stateId && options.stateId !== 'all') {
-        const stateObj = DEMO_STATES.find((s) => s.id === options.stateId || s.name.toLowerCase() === options.stateId?.toLowerCase());
-        if (stateObj && !item.location.state.toLowerCase().includes(stateObj.name.toLowerCase())) {
-          return false;
-        }
-      }
-
-      return true;
+    // Geodesic distance calculation fallback
+    return this.getAllHazards().filter((h) => {
+      if (h.status === 'resolved') return false;
+      const d = this.calculateDistanceKm([lat, lng], h.location.coordinates);
+      return d <= (radiusKm || h.location.radiusKm || 50);
     });
   }
 
-  public static getMetricsSummary() {
-    const totalHazards = this.hazards.length;
-    const criticalHazards = this.hazards.filter((h) => h.severity === 'critical').length;
-    const warningHazards = this.hazards.filter((h) => h.severity === 'warning').length;
-    const activeIncidents = this.hazards.filter((h) => h.nature === 'incident' && h.status === 'active').length;
-    const activeWarnings = this.hazards.filter((h) => h.nature === 'warning' && h.status === 'active').length;
-    const activeForecasts = this.hazards.filter((h) => h.nature === 'forecast').length;
+  /**
+   * Returns all monitored hazards (excluding expired/resolved by default for active feeds)
+   */
+  public static getAllHazards(includeResolved: boolean = false): HazardItem[] {
+    if (!this.isInitialized && this.hazards.length === 0) {
+      this.hazards = [...DEMO_HAZARDS];
+      this.isInitialized = true;
+    }
+    if (includeResolved) {
+      return [...this.hazards];
+    }
+    return this.hazards.filter((h) => h.status !== 'resolved');
+  }
 
+  /**
+   * Finds hazard by unique identifier
+   */
+  public static getHazardById(id: string): HazardItem | undefined {
+    return this.getAllHazards(true).find((h) => h.id === id);
+  }
+
+  /**
+   * Filters hazards reactively based on UI filter state
+   */
+  public static filterHazards(filters?: HazardFilterOptions): HazardItem[] {
+    let result = this.getAllHazards(filters?.status === 'all' || filters?.status === 'resolved');
+
+    if (!filters) return result;
+
+    if (filters.status && filters.status !== 'all') {
+      result = result.filter((h) => h.status === filters.status);
+    }
+
+    if (filters.category && filters.category !== 'all') {
+      result = result.filter((h) => h.category === filters.category);
+    }
+
+    if (filters.severity && filters.severity !== 'all') {
+      result = result.filter((h) => h.severity === filters.severity);
+    }
+
+    if (filters.nature && filters.nature !== 'all') {
+      result = result.filter((h) => h.nature === filters.nature);
+    }
+
+    if (filters.stateId && filters.stateId !== 'all') {
+      result = result.filter(
+        (h) => h.location.state.toLowerCase().includes(filters.stateId!.toLowerCase())
+      );
+    }
+
+    if (filters.searchQuery && filters.searchQuery.trim().length > 0) {
+      const q = filters.searchQuery.toLowerCase().trim();
+      result = result.filter(
+        (h) =>
+          h.title.toLowerCase().includes(q) ||
+          h.description.toLowerCase().includes(q) ||
+          h.location.district.toLowerCase().includes(q) ||
+          h.location.state.toLowerCase().includes(q) ||
+          h.source.agency.toLowerCase().includes(q)
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * Summary metrics tally for top dashboard counters
+   */
+  public static getMetricsSummary() {
+    const active = this.getAllHazards(false);
     return {
-      totalHazards,
-      criticalHazards,
-      warningHazards,
-      activeIncidents,
-      activeWarnings,
-      activeForecasts,
+      totalHazards: active.length,
+      criticalHazards: active.filter((h) => h.severity === 'critical').length,
+      warningHazards: active.filter((h) => h.severity === 'warning').length,
+      moderateHazards: active.filter((h) => h.severity === 'moderate').length,
+      monitoringCount: active.filter((h) => h.status === 'monitoring').length,
     };
   }
 
   public static subscribe(listener: () => void): () => void {
     this.listeners.push(listener);
     return () => {
-      this.listeners = this.listeners.filter((l) => l !== listener);
+      const idx = this.listeners.indexOf(listener);
+      if (idx >= 0) this.listeners.splice(idx, 1);
     };
   }
 
   private static notifyListeners() {
-    this.listeners.forEach((l) => l());
+    this.listeners.forEach((l) => {
+      try {
+        l();
+      } catch (e) {
+        console.error('[HazardService] Listener error:', e);
+      }
+    });
+  }
+
+  private static calculateDistanceKm(c1: [number, number], c2: [number, number]): number {
+    const [lat1, lon1] = c1;
+    const [lat2, lon2] = c2;
+    const R = 6371;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 10) / 10;
   }
 }

@@ -1,4 +1,18 @@
-import { WeatherTelemetry, HourlyForecastItem, DailyForecastItem, MultiHazardRiskEntry, WeatherRiskLevel } from '../types/weather';
+/**
+ * AEGIS ALERT - Frontend Weather Service
+ * Connects exclusively to the Aegis Software API (/api/weather) via ApiClient.
+ * Normalizes live meteorological telemetry, hourly/daily forecasts, and multi-hazard risks.
+ * Zero external browser API keys or direct third-party calls.
+ */
+
+import { ApiClient } from './apiClient';
+import {
+  WeatherTelemetry,
+  HourlyForecastItem,
+  DailyForecastItem,
+  MultiHazardRiskEntry,
+  WeatherRiskLevel,
+} from '../types/weather';
 import { DEMO_CITY_WEATHER } from '../data/demoWeather';
 
 export const CITY_COORDINATES: Record<string, { lat: number; lng: number; stateName: string; cityName: string }> = {
@@ -12,78 +26,99 @@ export const CITY_COORDINATES: Record<string, { lat: number; lng: number; stateN
   chennai: { lat: 13.0827, lng: 80.2707, cityName: 'Chennai', stateName: 'Tamil Nadu' },
   bengaluru: { lat: 12.9716, lng: 77.5946, cityName: 'Bengaluru', stateName: 'Karnataka' },
   jaipur: { lat: 26.9124, lng: 75.7873, cityName: 'Jaipur', stateName: 'Rajasthan' },
+  puri: { lat: 19.8135, lng: 85.8312, cityName: 'Puri', stateName: 'Odisha' },
+  shimla: { lat: 31.1048, lng: 77.1734, cityName: 'Shimla', stateName: 'Himachal Pradesh' },
+  patna: { lat: 25.5941, lng: 85.1376, cityName: 'Patna', stateName: 'Bihar' },
+  dehradun: { lat: 30.3165, lng: 78.0322, cityName: 'Dehradun', stateName: 'Uttarakhand' },
 };
 
-function getWindDirectionCardinal(deg: number): string {
-  const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-  const index = Math.round(deg / 22.5) % 16;
-  return directions[index] || 'NE';
-}
-
-function getConditionFromWmo(code: number, temp: number, windSpeed: number, precip: number): {
+interface WeatherApiResponse {
+  cityName: string;
+  stateName: string;
+  country?: string;
+  coordinates: [number, number];
+  updatedAt: string;
   condition: string;
-  conditionCode: 'sunny' | 'partly_cloudy' | 'cloudy' | 'rain' | 'heavy_rain' | 'thunderstorm' | 'fog' | 'heatwave' | 'cyclonic';
-} {
-  if (temp >= 40) return { condition: 'Extreme Heatwave Alert', conditionCode: 'heatwave' };
-  if (windSpeed >= 55) return { condition: 'Severe Cyclonic Gale Winds', conditionCode: 'cyclonic' };
-  if (code >= 95) return { condition: 'Severe Thunderstorms & Lightning', conditionCode: 'thunderstorm' };
-  if (code >= 80 || code === 65 || precip >= 10) return { condition: 'Heavy Inundation Rainfall', conditionCode: 'heavy_rain' };
-  if (code >= 51 || code === 61 || code === 63 || precip > 0) return { condition: 'Passing Rain Showers', conditionCode: 'rain' };
-  if (code === 45 || code === 48) return { condition: 'Dense Fog & Low Visibility', conditionCode: 'fog' };
-  if (code === 3) return { condition: 'Overcast Skies', conditionCode: 'cloudy' };
-  if (code === 1 || code === 2) return { condition: 'Partly Cloudy', conditionCode: 'partly_cloudy' };
-  return { condition: 'Clear Skies & Sunny', conditionCode: 'sunny' };
+  conditionCode?: string;
+  temp: number;
+  feelsLike?: number;
+  tempMin?: number;
+  tempMax?: number;
+  humidity: number;
+  windSpeed: number;
+  windDirection?: string;
+  windGust?: number;
+  rainProbability?: number;
+  rainfallExpectedMm?: number;
+  airQualityIndex?: number;
+  airQualityStatus?: string;
+  uvIndex?: number;
+  uvStatus?: string;
+  barometricPressureHpa?: number;
+  visibilityKm?: number;
+  dewPointCelsius?: number;
+  cloudCoverPercent?: number;
+  solarRadiationWm2?: number;
+  sunrise?: string;
+  sunset?: string;
+  hourlyForecast?: HourlyForecastItem[];
+  dailyForecast?: DailyForecastItem[];
+  hazardRisks?: MultiHazardRiskEntry[];
+  dataSource?: {
+    authority: string;
+    radarStation: string;
+    modelResolution: string;
+    telemetryFreshness: string;
+  };
 }
 
-function getAQIStatus(aqi: number): 'Good' | 'Moderate' | 'Unhealthy' | 'Severe' | 'Hazardous' {
-  if (aqi <= 50) return 'Good';
-  if (aqi <= 100) return 'Moderate';
-  if (aqi <= 200) return 'Unhealthy';
-  if (aqi <= 300) return 'Severe';
-  return 'Hazardous';
-}
-
-function getUVStatus(uv: number): 'Low' | 'Moderate' | 'High' | 'Very High' | 'Extreme' {
-  if (uv <= 2) return 'Low';
-  if (uv <= 5) return 'Moderate';
-  if (uv <= 7) return 'High';
-  if (uv <= 10) return 'Very High';
-  return 'Extreme';
-}
-
-interface LiveCityCache {
+interface NormalizedWeatherBundle {
   telemetry: WeatherTelemetry;
   hourly: HourlyForecastItem[];
   daily: DailyForecastItem[];
   risks: MultiHazardRiskEntry[];
-  timestamp: number;
+  dataSource?: {
+    authority: string;
+    radarStation: string;
+    modelResolution: string;
+    telemetryFreshness: string;
+  };
+  lastFetchedAt: number;
 }
 
-const liveCache: Record<string, LiveCityCache> = {};
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const memoryStore = new Map<string, NormalizedWeatherBundle>();
+const listeners: Array<() => void> = [];
 
 export class WeatherService {
   /**
-   * Reverse geocodes coordinates to Indian City, District & State
+   * Reverse geocodes coordinates to closest Indian registered city and district
    */
   public static async reverseGeocode(lat: number, lng: number): Promise<{ city: string; state: string; district: string }> {
-    try {
-      const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`);
-      if (res.ok) {
-        const data = await res.json();
-        const city = data.city || data.locality || data.principalSubdivision || 'Local Station';
-        const state = data.principalSubdivision || 'India';
-        const district = data.locality || city;
-        return { city, state, district };
+    let closestKey = 'mumbai';
+    let minDistance = Infinity;
+
+    for (const [key, cfg] of Object.entries(CITY_COORDINATES)) {
+      const dist = Math.hypot(cfg.lat - lat, cfg.lng - lng);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestKey = key;
       }
-    } catch {
-      // ignore
     }
-    return { city: 'GPS Location', state: 'India', district: 'Local Area' };
+
+    const matched = CITY_COORDINATES[closestKey];
+    if (minDistance <= 0.6) {
+      return { city: matched.cityName, state: matched.stateName, district: matched.cityName };
+    }
+
+    return {
+      city: `${matched.cityName} Sector`,
+      state: matched.stateName,
+      district: `${matched.cityName} Outskirts`,
+    };
   }
 
   /**
-   * Fetches real live weather for arbitrary coordinates (e.g. user GPS position)
+   * Fetches normalized weather telemetry from Aegis API for arbitrary coordinates
    */
   public static async fetchLiveWeatherByCoordinates(
     lat: number,
@@ -91,294 +126,284 @@ export class WeatherService {
     customCityName?: string,
     customStateName?: string
   ): Promise<WeatherTelemetry> {
-    const key = `gps_${lat.toFixed(3)}_${lng.toFixed(3)}`;
+    const cacheKey = `geo_${lat.toFixed(3)}_${lng.toFixed(3)}`;
+    const existing = memoryStore.get(cacheKey);
 
-    // Check memory cache
-    const cached = liveCache[key];
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      return cached.telemetry;
+    if (existing && Date.now() - existing.lastFetchedAt < 30000) {
+      return existing.telemetry;
     }
 
     try {
-      let resolvedCity = customCityName;
-      let resolvedState = customStateName;
+      const raw = await ApiClient.get<WeatherApiResponse>('/weather', {
+        lat: Number(lat.toFixed(4)),
+        lng: Number(lng.toFixed(4)),
+        city: customCityName,
+      });
 
-      if (!resolvedCity || !resolvedState) {
-        const geo = await this.reverseGeocode(lat, lng);
-        resolvedCity = resolvedCity || geo.city;
-        resolvedState = resolvedState || geo.state;
-      }
-
-      const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,uv_index,cloud_cover,dew_point_2m,weather_code&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset&timezone=Asia%2FKolkata`;
-      const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lng}&current=us_aqi,pm10,pm2_5,nitrogen_dioxide,sulphur_dioxide,ozone&timezone=Asia%2FKolkata`;
-
-      const [weatherRes, aqiRes] = await Promise.allSettled([
-        fetch(weatherUrl, { headers: { Accept: 'application/json' } }),
-        fetch(aqiUrl, { headers: { Accept: 'application/json' } }),
-      ]);
-
-      if (weatherRes.status !== 'fulfilled' || !weatherRes.value.ok) {
-        throw new Error('Failed to fetch Open-Meteo GPS stream');
-      }
-
-      const weatherJson = await weatherRes.value.json();
-      const current = weatherJson.current || {};
-      const daily = weatherJson.daily || {};
-      const hourly = weatherJson.hourly || {};
-
-      let aqiVal = 65;
-      if (aqiRes.status === 'fulfilled' && aqiRes.value.ok) {
-        const aqiJson = await aqiRes.value.json();
-        if (aqiJson.current?.us_aqi) {
-          aqiVal = Math.round(aqiJson.current.us_aqi);
+      if (raw) {
+        const normalized = this.normalizeBackendResponse(raw, lat, lng, customCityName, customStateName);
+        memoryStore.set(cacheKey, normalized);
+        if (customCityName) {
+          memoryStore.set(customCityName.toLowerCase(), normalized);
         }
+        this.notifyListeners();
+        return normalized.telemetry;
       }
-
-      const temp = Math.round(current.temperature_2m || 30);
-      const windSpeed = Math.round(current.wind_speed_10m || 15);
-      const windGust = Math.round(current.wind_gusts_10m || windSpeed * 1.3);
-      const windDirection = getWindDirectionCardinal(current.wind_direction_10m || 45);
-      const humidity = Math.round(current.relative_humidity_2m || 65);
-      const precip = Number(current.precipitation || 0);
-      const uv = Math.round(current.uv_index || 6);
-      const pressure = Math.round(current.surface_pressure || 1012);
-      const cloudCover = Math.round(current.cloud_cover || 20);
-      const dewPoint = Math.round(current.dew_point_2m || temp - 5);
-
-      const wmoCode = current.weather_code || 0;
-      const { condition, conditionCode } = getConditionFromWmo(wmoCode, temp, windSpeed, precip);
-
-      const tempMin = daily.temperature_2m_min?.[0] ? Math.round(daily.temperature_2m_min[0]) : temp - 4;
-      const tempMax = daily.temperature_2m_max?.[0] ? Math.round(daily.temperature_2m_max[0]) : temp + 4;
-      const rainProbability = daily.precipitation_probability_max?.[0] ? Math.round(daily.precipitation_probability_max[0]) : (precip > 0 ? 80 : 15);
-      const rainfallExpectedMm = daily.precipitation_sum?.[0] ? Number(daily.precipitation_sum[0]) : (precip > 0 ? Number(precip.toFixed(1)) : 0);
-
-      const sunrise = daily.sunrise?.[0] ? new Date(daily.sunrise[0]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '05:48 AM';
-      const sunset = daily.sunset?.[0] ? new Date(daily.sunset[0]).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '06:34 PM';
-
-      const now = new Date();
-      const updatedTimeStr = `Live GPS: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} IST (Open-Meteo Real Data)`;
-
-      const telemetry: WeatherTelemetry = {
-        cityName: resolvedCity,
-        stateName: resolvedState,
-        country: 'India',
-        coordinates: [lat, lng],
-        updatedAt: updatedTimeStr,
-        condition,
-        conditionCode,
-        temp,
-        feelsLike: Math.round(current.apparent_temperature || temp + 2),
-        tempMin,
-        tempMax,
-        humidity,
-        windSpeed,
-        windDirection,
-        windGust,
-        rainProbability,
-        rainfallExpectedMm,
-        airQualityIndex: aqiVal,
-        airQualityStatus: getAQIStatus(aqiVal),
-        uvIndex: uv,
-        uvStatus: getUVStatus(uv),
-        barometricPressureHpa: pressure,
-        visibilityKm: humidity > 85 ? 6.5 : 12.0,
-        dewPointCelsius: dewPoint,
-        cloudCoverPercent: cloudCover,
-        solarRadiationWm2: uv > 5 ? 780 : 350,
-        sunrise,
-        sunset,
-      };
-
-      // Hourly items
-      const hourlyItems: HourlyForecastItem[] = [];
-      const currentHourIndex = now.getHours();
-      const times = hourly.time || [];
-      const temps = hourly.temperature_2m || [];
-      const rainProbs = hourly.precipitation_probability || [];
-      const windSpeeds = hourly.wind_speed_10m || [];
-      const weatherCodes = hourly.weather_code || [];
-
-      for (let i = currentHourIndex; i < Math.min(times.length, currentHourIndex + 24); i++) {
-        const itemDate = new Date(times[i]);
-        const hTime = itemDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const hTemp = Math.round(temps[i] || temp);
-        const hRainProb = Math.round(rainProbs[i] || 0);
-        const hWind = Math.round(windSpeeds[i] || windSpeed);
-        const hCode = weatherCodes[i] || 0;
-        const hConditionInfo = getConditionFromWmo(hCode, hTemp, hWind, hRainProb > 50 ? 5 : 0);
-
-        let hazardRisk: WeatherRiskLevel = 'low';
-        if (hTemp >= 42 || hWind >= 55 || hRainProb >= 85) hazardRisk = 'critical';
-        else if (hTemp >= 38 || hWind >= 40 || hRainProb >= 65) hazardRisk = 'warning';
-        else if (hTemp >= 34 || hRainProb >= 40) hazardRisk = 'moderate';
-
-        hourlyItems.push({
-          time: hTime,
-          label: i === currentHourIndex ? 'Now' : `+${i - currentHourIndex}h`,
-          temp: hTemp,
-          rainProb: hRainProb,
-          windSpeed: hWind,
-          condition: hConditionInfo.condition,
-          conditionCode: hConditionInfo.conditionCode,
-          hazardRisk,
-        });
-      }
-
-      // Daily items
-      const dailyItems: DailyForecastItem[] = [];
-      const dTimes = daily.time || [];
-      const dMaxTemps = daily.temperature_2m_max || [];
-      const dMinTemps = daily.temperature_2m_min || [];
-      const dRainProbs = daily.precipitation_probability_max || [];
-      const dPrecipSums = daily.precipitation_sum || [];
-      const dCodes = daily.weather_code || [];
-
-      for (let d = 0; d < Math.min(dTimes.length, 7); d++) {
-        const dayObj = new Date(dTimes[d]);
-        const dayName = d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : dayObj.toLocaleDateString('en-US', { weekday: 'short' });
-        const dateStr = dayObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        const dMax = Math.round(dMaxTemps[d] || tempMax);
-        const dMin = Math.round(dMinTemps[d] || tempMin);
-        const dRain = Math.round(dRainProbs[d] || 0);
-        const dPrecip = Number(dPrecipSums[d] || 0);
-        const dCode = dCodes[d] || 0;
-        const dCond = getConditionFromWmo(dCode, dMax, windSpeed, dPrecip);
-
-        let riskSeverity: WeatherRiskLevel = 'low';
-        let primaryRisk = 'Optimal Atmospheric Window';
-        if (dMax >= 41) {
-          riskSeverity = 'critical';
-          primaryRisk = 'Extreme Heatwave / Thermal Stress';
-        } else if (dPrecip >= 35 || dRain >= 80) {
-          riskSeverity = 'warning';
-          primaryRisk = 'Flash Inundation & Street Flooding';
-        } else if (dRain >= 50) {
-          riskSeverity = 'moderate';
-          primaryRisk = 'Thunderstorm / Lightning Alert';
-        }
-
-        dailyItems.push({
-          day: dayName,
-          date: dateStr,
-          tempMin: dMin,
-          tempMax: dMax,
-          rainProb: dRain,
-          rainfallMm: Number(dPrecip.toFixed(1)),
-          condition: dCond.condition,
-          conditionCode: dCond.conditionCode,
-          primaryRisk,
-          riskSeverity,
-        });
-      }
-
-      // Risks
-      const risks: MultiHazardRiskEntry[] = [];
-      if (temp >= 38) {
-        risks.push({
-          hazardType: 'Thermal Heat Index / Heatwave',
-          category: 'meteorological',
-          confidencePercent: Math.min(98, 70 + (temp - 38) * 7),
-          riskLevel: temp >= 42 ? 'critical' : 'warning',
-          timeframe: 'Next 12-24 Hours',
-          summary: `Surface ambient temperature of ${temp}°C detected at current GPS coordinates.`,
-          affectedDistricts: [resolvedCity],
-        });
-      }
-
-      if (rainfallExpectedMm >= 15 || rainProbability >= 60) {
-        risks.push({
-          hazardType: 'Monsoonal Inundation & Drainage Overload',
-          category: 'hydrological',
-          confidencePercent: Math.min(95, Math.round(rainProbability * 0.95)),
-          riskLevel: rainfallExpectedMm >= 40 ? 'critical' : 'warning',
-          timeframe: 'Next 6-18 Hours',
-          summary: `Precipitation probability at ${rainProbability}% with ${rainfallExpectedMm}mm expected.`,
-          affectedDistricts: [resolvedCity],
-        });
-      }
-
-      if (aqiVal >= 150) {
-        risks.push({
-          hazardType: 'Atmospheric PM2.5 / Ambient Smog Spike',
-          category: 'environmental',
-          confidencePercent: 92,
-          riskLevel: aqiVal >= 250 ? 'critical' : 'warning',
-          timeframe: 'Immediate & Ongoing',
-          summary: `Real-time CAMS Air Quality Index measured at ${aqiVal} AQI (${getAQIStatus(aqiVal)}).`,
-          affectedDistricts: [resolvedCity],
-        });
-      }
-
-      if (risks.length === 0) {
-        risks.push({
-          hazardType: 'Baseline Atmospheric Stability',
-          category: 'meteorological',
-          confidencePercent: 94,
-          riskLevel: 'low',
-          timeframe: 'Next 48 Hours',
-          summary: `Local sensors report stable weather conditions (${temp}°C, ${windSpeed} km/h winds).`,
-          affectedDistricts: [resolvedCity],
-        });
-      }
-
-      liveCache[key] = {
-        telemetry,
-        hourly: hourlyItems,
-        daily: dailyItems,
-        risks,
-        timestamp: Date.now(),
-      };
-
-      return telemetry;
-    } catch (err) {
-      console.warn('[WeatherService] fetchLiveWeatherByCoordinates failed:', err);
-      return DEMO_CITY_WEATHER['hyderabad'];
+    } catch (e) {
+      console.warn('[WeatherService] Aegis API weather fetch error, using cached fallback:', e);
     }
+
+    // Graceful fallback to nearest preset
+    const fallbackCity = customCityName ? customCityName.toLowerCase() : 'mumbai';
+    const fallback = DEMO_CITY_WEATHER[fallbackCity] || DEMO_CITY_WEATHER['mumbai'];
+    const fallbackBundle: NormalizedWeatherBundle = {
+      telemetry: {
+        ...fallback,
+        cityName: customCityName || fallback.cityName,
+        stateName: customStateName || fallback.stateName,
+        coordinates: [lat, lng],
+        updatedAt: new Date().toISOString(),
+      },
+      hourly: this.generateSyntheticHourly(fallback),
+      daily: this.generateSyntheticDaily(fallback),
+      risks: this.generateSyntheticRisks(fallback),
+      lastFetchedAt: Date.now(),
+    };
+
+    memoryStore.set(cacheKey, fallbackBundle);
+    return fallbackBundle.telemetry;
   }
 
+  /**
+   * Fetches weather telemetry for a named Indian metro/district
+   */
   public static async fetchLiveCityWeather(cityKey: string): Promise<WeatherTelemetry> {
-    const key = cityKey.toLowerCase();
-    const cityConfig = CITY_COORDINATES[key] || CITY_COORDINATES['hyderabad'];
-    return this.fetchLiveWeatherByCoordinates(cityConfig.lat, cityConfig.lng, cityConfig.cityName, cityConfig.stateName);
+    const key = cityKey.toLowerCase().trim();
+    const config = CITY_COORDINATES[key];
+
+    if (config) {
+      return this.fetchLiveWeatherByCoordinates(config.lat, config.lng, config.cityName, config.stateName);
+    }
+
+    try {
+      const raw = await ApiClient.get<WeatherApiResponse>('/weather', { city: cityKey });
+      if (raw) {
+        const normalized = this.normalizeBackendResponse(raw, raw.coordinates?.[0] || 19.076, raw.coordinates?.[1] || 72.877, cityKey);
+        memoryStore.set(key, normalized);
+        this.notifyListeners();
+        return normalized.telemetry;
+      }
+    } catch (e) {
+      console.warn(`[WeatherService] Error fetching weather for ${cityKey}:`, e);
+    }
+
+    const fallback = DEMO_CITY_WEATHER[key] || DEMO_CITY_WEATHER['mumbai'];
+    return fallback;
   }
 
+  /**
+   * Synchronous accessor for currently cached weather
+   */
   public static getWeatherForCity(cityKey: string): WeatherTelemetry {
-    const key = cityKey.toLowerCase();
-    const cached = liveCache[key];
+    const key = cityKey.toLowerCase().trim();
+    const cached = memoryStore.get(key) || Array.from(memoryStore.values())[0];
     if (cached) return cached.telemetry;
-    return DEMO_CITY_WEATHER[key] || DEMO_CITY_WEATHER['hyderabad'];
+    return DEMO_CITY_WEATHER[key] || DEMO_CITY_WEATHER['mumbai'];
   }
 
-  public static getHourlyForecast(cityKey: string = 'hyderabad'): HourlyForecastItem[] {
-    const key = cityKey.toLowerCase();
-    const cached = liveCache[key] || Object.values(liveCache)[0];
+  /**
+   * Hourly predictive forecast items for timeline chart
+   */
+  public static getHourlyForecast(cityKey: string = 'mumbai'): HourlyForecastItem[] {
+    const key = cityKey.toLowerCase().trim();
+    const cached = memoryStore.get(key) || Array.from(memoryStore.values())[0];
     if (cached && cached.hourly.length > 0) return cached.hourly;
+
     const base = this.getWeatherForCity(cityKey);
-    const nowHour = new Date().getHours();
-    return Array.from({ length: 24 }).map((_, i) => {
-      const h = (nowHour + i) % 24;
-      const hStr = `${String(h).padStart(2, '0')}:00`;
-      const tempVariation = Math.sin((i / 24) * Math.PI * 2) * 4;
-      const hTemp = Math.round(base.temp + tempVariation);
+    return this.generateSyntheticHourly(base);
+  }
+
+  /**
+   * 7-day extended predictive forecast items
+   */
+  public static getDailyForecast(cityKey: string = 'mumbai'): DailyForecastItem[] {
+    const key = cityKey.toLowerCase().trim();
+    const cached = memoryStore.get(key) || Array.from(memoryStore.values())[0];
+    if (cached && cached.daily.length > 0) return cached.daily;
+
+    const base = this.getWeatherForCity(cityKey);
+    return this.generateSyntheticDaily(base);
+  }
+
+  /**
+   * Multi-hazard risk confidence matrix entries
+   */
+  public static getMultiHazardRiskIndex(cityKey: string = 'mumbai'): MultiHazardRiskEntry[] {
+    const key = cityKey.toLowerCase().trim();
+    const cached = memoryStore.get(key) || Array.from(memoryStore.values())[0];
+    if (cached && cached.risks.length > 0) return cached.risks;
+
+    const base = this.getWeatherForCity(cityKey);
+    return this.generateSyntheticRisks(base);
+  }
+
+  /**
+   * List of available monitored regional cities
+   */
+  public static getAvailableCities() {
+    return Object.keys(CITY_COORDINATES).map((k) => {
+      const cached = memoryStore.get(k)?.telemetry;
+      const fallback = DEMO_CITY_WEATHER[k] || DEMO_CITY_WEATHER['mumbai'];
       return {
-        time: hStr,
-        label: i === 0 ? 'Now' : `+${i}h`,
-        temp: hTemp,
-        rainProb: Math.max(5, Math.min(95, Math.round(base.rainProbability + (Math.cos(i) * 15)))),
-        windSpeed: Math.round(base.windSpeed + Math.sin(i) * 5),
-        condition: base.condition,
-        conditionCode: base.conditionCode,
-        hazardRisk: (hTemp > 40 || base.windSpeed > 45) ? 'warning' : 'low',
+        key: k,
+        name: CITY_COORDINATES[k].cityName,
+        state: CITY_COORDINATES[k].stateName,
+        temp: cached ? cached.temp : fallback.temp,
+        condition: cached ? cached.condition : fallback.condition,
       };
     });
   }
 
-  public static getDailyForecast(cityKey: string = 'hyderabad'): DailyForecastItem[] {
-    const key = cityKey.toLowerCase();
-    const cached = liveCache[key] || Object.values(liveCache)[0];
-    if (cached && cached.daily.length > 0) return cached.daily;
-    const base = this.getWeatherForCity(cityKey);
+  public static subscribe(listener: () => void): () => void {
+    listeners.push(listener);
+    return () => {
+      const idx = listeners.indexOf(listener);
+      if (idx >= 0) listeners.splice(idx, 1);
+    };
+  }
+
+  private static notifyListeners() {
+    listeners.forEach((l) => {
+      try {
+        l();
+      } catch (e) {
+        console.error('[WeatherService] Listener error:', e);
+      }
+    });
+  }
+
+  /**
+   * Converts raw backend API payload into typed frontend bundle
+   */
+  private static normalizeBackendResponse(
+    raw: WeatherApiResponse,
+    fallbackLat: number,
+    fallbackLng: number,
+    cityHint?: string,
+    stateHint?: string
+  ): NormalizedWeatherBundle {
+    const coords: [number, number] = raw.coordinates && raw.coordinates.length === 2
+      ? raw.coordinates
+      : [fallbackLat, fallbackLng];
+
+    const temp = Math.round(raw.temp || 30);
+    const feelsLike = Math.round(raw.feelsLike || temp + 3);
+    const tempMin = Math.round(raw.tempMin || temp - 4);
+    const tempMax = Math.round(raw.tempMax || temp + 4);
+    const humidity = Math.round(raw.humidity || 70);
+    const windSpeed = Math.round(raw.windSpeed || 18);
+    const windDirection = raw.windDirection || 'SW';
+    const windGust = Math.round(raw.windGust || windSpeed * 1.3);
+    const rainProbability = Math.round(raw.rainProbability || (windSpeed > 30 ? 75 : 35));
+    const rainfallExpectedMm = Number(raw.rainfallExpectedMm || (rainProbability > 60 ? 45.2 : 0));
+    const aqi = Math.round(raw.airQualityIndex || 65);
+    const uvIndex = Math.round(raw.uvIndex || 6);
+
+    const conditionCode = (raw.conditionCode as any) || (
+      temp >= 40 ? 'heatwave' :
+      windSpeed >= 50 ? 'cyclonic' :
+      rainfallExpectedMm >= 40 ? 'heavy_rain' :
+      rainProbability >= 60 ? 'rain' :
+      humidity >= 85 ? 'cloudy' : 'partly_cloudy'
+    );
+
+    const uvStatus: 'Low' | 'Moderate' | 'High' | 'Very High' | 'Extreme' =
+      uvIndex <= 2 ? 'Low' : uvIndex <= 5 ? 'Moderate' : uvIndex <= 7 ? 'High' : uvIndex <= 10 ? 'Very High' : 'Extreme';
+
+    const airQualityStatus: 'Good' | 'Moderate' | 'Unhealthy' | 'Severe' | 'Hazardous' =
+      aqi <= 50 ? 'Good' : aqi <= 100 ? 'Moderate' : aqi <= 200 ? 'Unhealthy' : aqi <= 300 ? 'Severe' : 'Hazardous';
+
+    const telemetry: WeatherTelemetry = {
+      cityName: raw.cityName || cityHint || 'Current Area',
+      stateName: raw.stateName || stateHint || 'India',
+      country: raw.country || 'India',
+      coordinates: coords,
+      updatedAt: raw.updatedAt || new Date().toISOString(),
+      condition: raw.condition || 'Active Telemetry Stream',
+      conditionCode,
+      temp,
+      feelsLike,
+      tempMin,
+      tempMax,
+      humidity,
+      windSpeed,
+      windDirection,
+      windGust,
+      rainProbability,
+      rainfallExpectedMm,
+      airQualityIndex: aqi,
+      airQualityStatus,
+      uvIndex,
+      uvStatus,
+      barometricPressureHpa: Math.round(raw.barometricPressureHpa || 1006),
+      visibilityKm: Math.round(raw.visibilityKm || 8),
+      dewPointCelsius: Math.round(raw.dewPointCelsius || temp - 5),
+      cloudCoverPercent: Math.round(raw.cloudCoverPercent || (rainProbability > 50 ? 80 : 35)),
+      solarRadiationWm2: Math.round(raw.solarRadiationWm2 || uvIndex * 105),
+      sunrise: raw.sunrise || '06:08 AM IST',
+      sunset: raw.sunset || '06:35 PM IST',
+    };
+
+    const hourly = raw.hourlyForecast && raw.hourlyForecast.length > 0
+      ? raw.hourlyForecast
+      : this.generateSyntheticHourly(telemetry);
+
+    const daily = raw.dailyForecast && raw.dailyForecast.length > 0
+      ? raw.dailyForecast
+      : this.generateSyntheticDaily(telemetry);
+
+    const risks = raw.hazardRisks && raw.hazardRisks.length > 0
+      ? raw.hazardRisks
+      : this.generateSyntheticRisks(telemetry);
+
+    return {
+      telemetry,
+      hourly,
+      daily,
+      risks,
+      dataSource: raw.dataSource,
+      lastFetchedAt: Date.now(),
+    };
+  }
+
+  private static generateSyntheticHourly(base: WeatherTelemetry): HourlyForecastItem[] {
+    const currentHour = new Date().getHours();
+    return Array.from({ length: 24 }).map((_, i) => {
+      const h = (currentHour + i) % 24;
+      const hStr = `${String(h).padStart(2, '0')}:00`;
+      const tempVariation = Math.sin((i / 24) * Math.PI * 2) * 3.5;
+      const hTemp = Math.round(base.temp + tempVariation);
+      const hRain = Math.max(5, Math.min(95, Math.round(base.rainProbability + Math.cos(i) * 12)));
+
+      let hazardRisk: WeatherRiskLevel = 'low';
+      if (hTemp >= 41 || base.windSpeed >= 50 || hRain >= 85) hazardRisk = 'critical';
+      else if (hTemp >= 38 || base.windSpeed >= 38 || hRain >= 65) hazardRisk = 'warning';
+      else if (hTemp >= 34 || hRain >= 40) hazardRisk = 'moderate';
+
+      return {
+        time: hStr,
+        label: i === 0 ? 'Now' : `+${i}h`,
+        temp: hTemp,
+        rainProb: hRain,
+        windSpeed: Math.round(base.windSpeed + Math.sin(i) * 4),
+        condition: base.condition,
+        conditionCode: base.conditionCode,
+        hazardRisk,
+      };
+    });
+  }
+
+  private static generateSyntheticDaily(base: WeatherTelemetry): DailyForecastItem[] {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const now = new Date();
     return Array.from({ length: 7 }).map((_, d) => {
@@ -389,45 +414,54 @@ export class WeatherService {
         date: targetDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         tempMin: base.tempMin + (d % 2),
         tempMax: base.tempMax - (d % 3),
-        rainProb: Math.max(10, Math.min(90, base.rainProbability + d * 5)),
-        rainfallMm: base.rainfallExpectedMm,
+        rainProb: Math.max(10, Math.min(90, base.rainProbability + d * 4)),
+        rainfallMm: Number((base.rainfallExpectedMm * (1 - d * 0.12)).toFixed(1)),
         condition: base.condition,
         conditionCode: base.conditionCode,
-        primaryRisk: base.temp >= 40 ? 'Extreme Heat Stress' : 'Seasonal Monsoonal Pattern',
-        riskSeverity: base.temp >= 40 ? 'warning' : 'low',
+        primaryRisk: base.temp >= 40 ? 'Extreme Thermal Exposure' : base.rainProbability > 70 ? 'Heavy Runoff Inundation' : 'Standard Seasonal Window',
+        riskSeverity: base.temp >= 40 || base.rainProbability > 80 ? 'critical' : base.rainProbability > 60 ? 'warning' : 'low',
       };
     });
   }
 
-  public static getMultiHazardRiskIndex(cityKey: string = 'hyderabad'): MultiHazardRiskEntry[] {
-    const key = cityKey.toLowerCase();
-    const cached = liveCache[key] || Object.values(liveCache)[0];
-    if (cached && cached.risks.length > 0) return cached.risks;
-    const base = this.getWeatherForCity(cityKey);
-    return [
-      {
-        hazardType: base.temp >= 38 ? 'Thermal Heatwave Index' : 'Atmospheric Dispersion Stability',
+  private static generateSyntheticRisks(base: WeatherTelemetry): MultiHazardRiskEntry[] {
+    const risks: MultiHazardRiskEntry[] = [];
+    if (base.temp >= 38) {
+      risks.push({
+        hazardType: 'Thermal Heatwave / Heat Index Dome',
         category: 'meteorological',
-        confidencePercent: 91,
-        riskLevel: base.temp >= 40 ? 'critical' : base.temp >= 36 ? 'warning' : 'low',
-        timeframe: 'Next 24 Hours',
-        summary: `Ambient sensor telemetry reading ${base.temp}°C with ${base.humidity}% relative humidity in ${base.cityName}.`,
+        confidencePercent: 92,
+        riskLevel: base.temp >= 42 ? 'critical' : 'warning',
+        timeframe: 'Next 12-24 Hours',
+        summary: `Ambient surface temperature at ${base.temp}°C in ${base.cityName}. Elevated heat-stroke risk.`,
         affectedDistricts: [base.cityName, `${base.cityName} Metropolitan Area`],
-      },
-    ];
-  }
+      });
+    }
 
-  public static getAvailableCities() {
-    return Object.keys(CITY_COORDINATES).map((k) => {
-      const cached = liveCache[k]?.telemetry;
-      const fallback = DEMO_CITY_WEATHER[k] || DEMO_CITY_WEATHER['hyderabad'];
-      return {
-        key: k,
-        name: CITY_COORDINATES[k].cityName,
-        state: CITY_COORDINATES[k].stateName,
-        temp: cached ? cached.temp : fallback.temp,
-        condition: cached ? cached.condition : fallback.condition,
-      };
-    });
+    if (base.rainfallExpectedMm >= 15 || base.rainProbability >= 60) {
+      risks.push({
+        hazardType: 'Monsoonal Inundation & Urban Runoff',
+        category: 'hydrological',
+        confidencePercent: 88,
+        riskLevel: base.rainfallExpectedMm >= 40 ? 'critical' : 'warning',
+        timeframe: 'Next 6-18 Hours',
+        summary: `Anticipating ${base.rainfallExpectedMm}mm precipitation with ${base.rainProbability}% storm confidence.`,
+        affectedDistricts: [base.cityName, `${base.stateName} Lowland Basins`],
+      });
+    }
+
+    if (risks.length === 0) {
+      risks.push({
+        hazardType: 'Baseline Atmospheric Conditions',
+        category: 'meteorological',
+        confidencePercent: 95,
+        riskLevel: 'low',
+        timeframe: 'Next 48 Hours',
+        summary: `Current telemetry in ${base.cityName} within safe operating thresholds (${base.temp}°C, ${base.humidity}% humidity).`,
+        affectedDistricts: [base.cityName],
+      });
+    }
+
+    return risks;
   }
 }

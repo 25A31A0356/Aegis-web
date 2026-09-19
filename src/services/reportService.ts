@@ -1,3 +1,10 @@
+/**
+ * AEGIS ALERT - Citizen Incident Report Service
+ * Connects to Aegis Software API (/api/reports and /api/reports/media) via ApiClient.
+ * Handles client validation, media uploads, and persistent reporting queue.
+ */
+
+import { ApiClient } from './apiClient';
 import { CitizenReport, ReportMediaItem, ReportHazardType, ReportSeverity, ReportStatus } from '../types/report';
 
 const STORAGE_KEY = 'agies_citizen_reports';
@@ -120,10 +127,9 @@ export const INITIAL_DEMO_REPORTS: CitizenReport[] = [
 
 export class ReportService {
   /**
-   * Mock Object Storage abstraction for media uploads (e.g. S3 / GCS / Cloudflare R2)
+   * Uploads media attachment via Aegis API /api/reports/media
    */
   public static async uploadMediaToObjectStorage(file: File): Promise<ReportMediaItem> {
-    // Validate file type
     const validImageTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
     const validVideoTypes = ['video/mp4', 'video/quicktime', 'video/webm'];
     const isImage = validImageTypes.includes(file.type);
@@ -133,19 +139,11 @@ export class ReportService {
       throw new Error(`Unsupported media format: ${file.type}. Please upload JPG, PNG, or MP4.`);
     }
 
-    // Check size limits (Image <= 15MB, Video <= 50MB)
     const maxSizeBytes = isVideo ? 50 * 1024 * 1024 : 15 * 1024 * 1024;
     if (file.size > maxSizeBytes) {
       throw new Error(`File size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds maximum limit (${isVideo ? '50MB' : '15MB'}).`);
     }
 
-    // Simulate async network upload to object storage bucket
-    await new Promise((resolve) => setTimeout(resolve, 600));
-
-    const mediaId = `med-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const objectStorageKey = `s3://agies-media-vault/${new Date().getFullYear()}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${mediaId}-${file.name.replace(/\s+/g, '_')}`;
-
-    // Read preview URL
     let previewUrl = '';
     if (typeof FileReader !== 'undefined') {
       previewUrl = await new Promise<string>((resolve) => {
@@ -153,16 +151,39 @@ export class ReportService {
         reader.onloadend = () => resolve(reader.result as string);
         reader.readAsDataURL(file);
       });
-    } else if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
-      previewUrl = URL.createObjectURL(file);
-    } else {
-      previewUrl = `blob:https://agies.gov.in/${mediaId}`;
     }
 
+    try {
+      const uploadRes = await ApiClient.post<{ mediaUrl: string; fileId: string; sanitizedFileName: string }>(
+        '/reports/media',
+        {
+          fileName: file.name,
+          fileType: file.type,
+          fileSizeBytes: file.size,
+          base64Content: previewUrl.slice(0, 100),
+        }
+      );
+
+      if (uploadRes && uploadRes.mediaUrl) {
+        return {
+          id: uploadRes.fileId,
+          mediaReference: uploadRes.mediaUrl,
+          url: previewUrl || uploadRes.mediaUrl,
+          fileType: file.type,
+          fileSize: file.size,
+          fileName: uploadRes.sanitizedFileName,
+          uploadedAt: 'Just now',
+        };
+      }
+    } catch (e) {
+      console.warn('[ReportService] Backend media upload error, using local buffer:', e);
+    }
+
+    const mediaId = `med-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     return {
       id: mediaId,
-      mediaReference: objectStorageKey,
-      url: previewUrl,
+      mediaReference: `s3://agies-media-vault/${new Date().getFullYear()}/${mediaId}-${file.name.replace(/\s+/g, '_')}`,
+      url: previewUrl || `blob:https://agies.gov.in/${mediaId}`,
       fileType: file.type,
       fileSize: file.size,
       fileName: file.name,
@@ -171,12 +192,11 @@ export class ReportService {
   }
 
   /**
-   * POST /api/reports API endpoint simulation
+   * Submits citizen incident report to Aegis Software API (/api/reports)
    */
   public static async submitReport(
     payload: Omit<CitizenReport, 'id' | 'timestamp' | 'status'>
   ): Promise<CitizenReport> {
-    // Server-side validation
     if (!payload.hazardType) {
       throw new Error('Hazard type is required.');
     }
@@ -190,13 +210,46 @@ export class ReportService {
       throw new Error('Severity classification is required.');
     }
 
-    // Simulate backend network latency
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    const reportId = `AGIES-REP-${Math.floor(100000 + Math.random() * 900000)}`;
     const now = new Date();
     const timestamp = `Today, ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} IST`;
 
+    try {
+      const backendRes = await ApiClient.post<any>('/reports', {
+        hazardType: payload.hazardType,
+        title: `${payload.hazardLabel || payload.hazardType} incident near ${payload.location.city || 'local sector'}`,
+        description: payload.description,
+        severity: payload.severity,
+        location: {
+          lat: payload.location.lat,
+          lng: payload.location.lng,
+          address: payload.location.address,
+          city: payload.location.city,
+          state: payload.location.state,
+        },
+        mediaUrls: payload.media?.map((m) => m.url) || [],
+        contactInfo: {
+          name: payload.reporter?.name,
+          phone: payload.optionalDetails?.contactPhone,
+          isAnonymous: payload.reporter?.isAnonymous,
+        },
+      });
+
+      if (backendRes) {
+        const createdReport: CitizenReport = {
+          ...payload,
+          id: backendRes.trackingId || backendRes.id || `AGIES-REP-${Math.floor(100000 + Math.random() * 900000)}`,
+          timestamp: backendRes.submittedAt ? new Date(backendRes.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' IST' : timestamp,
+          status: backendRes.status || 'pending_review',
+        };
+
+        this.persistToLocalStorage(createdReport);
+        return createdReport;
+      }
+    } catch (err) {
+      console.warn('[ReportService] API report submission failed, persisting locally:', err);
+    }
+
+    const reportId = `AGIES-REP-${Math.floor(100000 + Math.random() * 900000)}`;
     const newReport: CitizenReport = {
       ...payload,
       id: reportId,
@@ -204,22 +257,78 @@ export class ReportService {
       status: 'pending_review',
     };
 
-    // Persist report in LocalStorage
+    this.persistToLocalStorage(newReport);
+    return newReport;
+  }
+
+  private static persistToLocalStorage(report: CitizenReport) {
     const existing = this.getAllReports();
-    const updated = [newReport, ...existing];
+    const updated = [report, ...existing.filter((r) => r.id !== report.id)];
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       }
     } catch (e) {
-      console.warn('[ReportService] Failed to save to localStorage:', e);
+      console.warn('[ReportService] Failed to save report to localStorage:', e);
     }
-
-    return newReport;
   }
 
   /**
-   * Get all citizen reports
+   * Fetches latest citizen reports from backend API or cached store
+   */
+  public static async fetchLiveReports(): Promise<CitizenReport[]> {
+    try {
+      const remote = await ApiClient.get<any[]>('/reports');
+      if (Array.isArray(remote) && remote.length > 0) {
+        const normalized: CitizenReport[] = remote.map((r) => ({
+          id: r.trackingId || r.id,
+          hazardType: (r.hazardType || 'other').toLowerCase() as ReportHazardType,
+          hazardLabel: r.title || r.hazardType,
+          location: {
+            lat: r.location?.lat || 19.076,
+            lng: r.location?.lng || 72.877,
+            address: r.location?.address || 'Reported Sector',
+            city: r.location?.city || 'Local Area',
+            state: r.location?.state || 'India',
+          },
+          media: (r.mediaUrls || []).map((url: string, i: number) => ({
+            id: `med-${i}`,
+            mediaReference: url,
+            url,
+            fileType: 'image/jpeg',
+            fileSize: 1024000,
+            fileName: `incident_media_${i}.jpg`,
+            uploadedAt: 'Verified',
+          })),
+          description: r.description,
+          severity: (r.severity || 'medium') as ReportSeverity,
+          optionalDetails: {
+            peopleAffectedEstimate: r.peopleAffected || 'Unknown',
+            isRoadBlocked: r.isRoadBlocked ?? false,
+            isImmediateDanger: r.isImmediateDanger ?? false,
+            contactPhone: r.contactInfo?.phone,
+          },
+          reporter: r.contactInfo ? { name: r.contactInfo.name, isAnonymous: r.contactInfo.isAnonymous } : { isAnonymous: true },
+          timestamp: r.submittedAt ? new Date(r.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' IST' : 'Recent',
+          status: (r.status || 'pending_review') as ReportStatus,
+          verificationNotes: r.dispatchUnitsAssigned?.length ? `Assigned to: ${r.dispatchUnitsAssigned.join(', ')}` : undefined,
+        }));
+
+        return normalized;
+      }
+    } catch (e) {
+      console.warn('[ReportService] Error fetching /api/reports:', e);
+    }
+
+    return this.getAllReports();
+  }
+
+  public static async fetchReportsFromApi(): Promise<CitizenReport[]> {
+    return this.fetchLiveReports();
+  }
+
+  /**
+   * Get all citizen reports from local cache
    */
   public static getAllReports(): CitizenReport[] {
     try {

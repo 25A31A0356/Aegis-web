@@ -100,6 +100,69 @@ export async function handleBackendApiRequest(req: HttpRequestContext): Promise<
 
   try {
     // -------------------------------------------------------------
+    // GET /api/health or GET /api/info or GET /api/discovery
+    // Safe Public API Discovery (No Secrets Exposed)
+    // -------------------------------------------------------------
+    if (method === 'GET' && (path === '/api/health' || path === '/api/info' || path === '/api/discovery')) {
+      const discoveryInfo = {
+        name: 'Aegis Software Disaster Intelligence API',
+        version: '2.0.0',
+        apiVersion: 'v1',
+        status: 'HEALTHY',
+        serverTime: new Date().toISOString(),
+        endpoints: {
+          discovery: '/api/discovery',
+          health: '/api/health',
+          weather: '/api/weather',
+          alerts: '/api/alerts',
+          nearbyAlerts: '/api/alerts/nearby',
+          mapLayers: '/api/map/layers',
+          mapEvents: '/api/map/events',
+          reports: '/api/reports',
+          reportMedia: '/api/reports/media',
+          analytics: '/api/analytics',
+          risk: '/api/risk',
+          safetyGuides: '/api/safety-guides',
+          aiChat: '/api/ai/chat',
+          csrfToken: '/api/csrf-token',
+          authLogin: '/api/auth/login',
+          authMe: '/api/auth/me',
+        },
+        supportedHazardCategories: [
+          'flood',
+          'flash_flood',
+          'cyclone',
+          'earthquake',
+          'wildfire',
+          'heatwave',
+          'coldwave',
+          'heavy_rain',
+          'thunderstorm',
+          'lightning',
+          'landslide',
+          'building_collapse',
+        ],
+        authMethods: ['Bearer JWT', 'CSRF Token Handshake'],
+        dataAuthorities: [
+          'India Meteorological Department (IMD)',
+          'Central Water Commission (CWC)',
+          'National Disaster Management Authority (NDMA)',
+          'National Center for Seismology (NCS)',
+        ],
+        clientConfig: {
+          rateLimitWindowMs: 60000,
+          rateLimitMax: 100,
+          maxImageUploadMb: 10,
+          maxVideoUploadMb: 50,
+          allowedMediaMimeTypes: ['image/jpeg', 'image/png', 'video/mp4', 'video/quicktime'],
+        },
+      };
+
+      const res = ErrorHandler.createResponse(discoveryInfo);
+      return { status: res.status, headers: attachHeaders(), body: res.body };
+    }
+
+    // -------------------------------------------------------------
     // GET /api/csrf-token
     // -------------------------------------------------------------
     if (method === 'GET' && path === '/api/csrf-token') {
@@ -226,6 +289,7 @@ export async function handleBackendApiRequest(req: HttpRequestContext): Promise<
         category: query.category ? SanitizationMiddleware.stripHtmlTags(query.category) : undefined,
         severity: query.severity ? SanitizationMiddleware.stripHtmlTags(query.severity) : undefined,
         stateId: query.stateId ? SanitizationMiddleware.stripHtmlTags(query.stateId) : undefined,
+        status: query.status ? SanitizationMiddleware.stripHtmlTags(query.status) : undefined,
       });
       const res = ErrorHandler.createResponse(alerts);
       return { status: res.status, headers: attachHeaders(), body: res.body };
@@ -377,6 +441,16 @@ export async function handleBackendApiRequest(req: HttpRequestContext): Promise<
         return { status: err.status, headers: attachHeaders(), body: err.body };
       }
       const res = ErrorHandler.createResponse({ id, deleted: true });
+      return { status: res.status, headers: attachHeaders(), body: res.body };
+    }
+
+    // -------------------------------------------------------------
+    // GET /api/reports
+    // -------------------------------------------------------------
+    if (method === 'GET' && path === '/api/reports') {
+      const limit = query.limit ? parseInt(query.limit, 10) : 50;
+      const reports = await ReportService.getReports(limit);
+      const res = ErrorHandler.createResponse(reports);
       return { status: res.status, headers: attachHeaders(), body: res.body };
     }
 
