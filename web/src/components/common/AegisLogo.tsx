@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 
 interface AegisLogoProps {
   className?: string;
@@ -13,57 +13,15 @@ export const AegisShieldIcon: React.FC<{ size?: number; className?: string }> = 
   className = '',
 }) => {
   return (
-    <svg
+    <img
+      src="/logo.png"
+      alt="AEGIS ALERT Logo"
       width={size}
       height={size}
-      viewBox="0 0 100 100"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={`shrink-0 drop-shadow-xs ${className}`}
-      aria-label="AEGIS ALERT Shield Logo"
-    >
-      {/* Outer Shield Outline */}
-      <path
-        d="M50 4L16 17V48C16 71.5 30.5 91 50 97C69.5 91 84 71.5 84 48V17L50 4Z"
-        fill="#0B132B"
-        stroke="#1C2D5A"
-        strokeWidth="3.5"
-        strokeLinejoin="round"
-      />
-      {/* Inner subtle shield bevel */}
-      <path
-        d="M50 8L20 20V48C20 68.5 32.5 86.5 50 92C67.5 86.5 80 68.5 80 48V20L50 8Z"
-        fill="#0F172A"
-      />
-
-      {/* Signal Arc 3 (Outer Wave) */}
-      <path
-        d="M32 37C37.5 30.5 43.5 27 50 27C56.5 27 62.5 30.5 68 37"
-        stroke="#0284C7"
-        strokeWidth="4.5"
-        strokeLinecap="round"
-      />
-
-      {/* Signal Arc 2 (Middle Wave) */}
-      <path
-        d="M38 46C41.5 41.5 45.5 39 50 39C54.5 39 58.5 41.5 62 46"
-        stroke="#0EA5E9"
-        strokeWidth="4.5"
-        strokeLinecap="round"
-      />
-
-      {/* Signal Arc 1 (Inner Wave) */}
-      <path
-        d="M44 55C45.8 52.8 47.8 51.5 50 51.5C52.2 51.5 54.2 52.8 56 55"
-        stroke="#38BDF8"
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-
-      {/* Central Solid Beacon Dot */}
-      <circle cx="50" cy="68" r="9" fill="#0284C7" />
-      <circle cx="50" cy="68" r="6" fill="#38BDF8" />
-    </svg>
+      style={{ width: `${size}px`, height: `${size}px` }}
+      className={`shrink-0 object-contain drop-shadow-xs select-none ${className}`}
+      loading="eager"
+    />
   );
 };
 
