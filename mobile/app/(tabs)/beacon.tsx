@@ -244,11 +244,21 @@ export default function BeaconScreen() {
         latitude: userCoord.latitude,
         longitude: userCoord.longitude,
       });
+
+      Alert.alert(
+        "Emergency SOS Activated",
+        "? SOS Saved Locally in Offline Queue.\nWill auto-transmit to control room the second network is detected.\n\nOpening direct SMS dispatch to emergency family contacts...",
+        [{ text: "OK", onPress: () => sendSmsSos() }]
+      );
     } catch (e) {
       console.warn("[Beacon] SOS Trigger Error:", e);
+      Alert.alert(
+        "Emergency SOS Queued Offline",
+        "? SOS Saved Locally in Offline Queue.\nWill auto-transmit to control room the second network is detected.\n\nOpening direct SMS dispatch to emergency family contacts...",
+        [{ text: "OK", onPress: () => sendSmsSos() }]
+      );
     }
 
-    // 3. Automatically trigger emergency SMS with live GPS link to the configured family contact
     sendSmsSos();
   };
 
