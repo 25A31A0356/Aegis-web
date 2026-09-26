@@ -63,7 +63,7 @@ export function AegisLogo({
               HAZARD & WEATHER INTELLIGENCE
             </Text>
           )}
-        </div>
+        </View>
       )}
     </View>
   );
