@@ -86,6 +86,9 @@ const config: ExpoConfig = {
     output: "static",
     favicon: "./assets/images/favicon.png",
   },
+  experiments: {
+    baseUrl: "/aegis-alert",
+  },
   plugins: [
     "expo-router",
     "expo-notifications",
