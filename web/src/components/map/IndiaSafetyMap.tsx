@@ -21,6 +21,12 @@ import {
 } from '../../data/demoWindData';
 import { TwoHourWindSnapshot } from '../../services/windService';
 import { CycloneSnapshot, ACTIVE_CYCLONES_INDIA } from '../../services/cycloneService';
+import { IMD_DWR_STATIONS, IMD_STORM_CELLS, RadarStormCell, DWRStation } from '../../data/demoRadarData';
+import { WeatherTelemetryNode } from '../../services/realtimeWeatherService';
+import { TemperatureAnomalyNode, AnomalyContourZone } from '../../services/temperatureAnomalyService';
+import { RealtimeWeatherService } from '../../services/realtimeWeatherService';
+import { TemperatureAnomalyService, INDIA_TEMPERATURE_ANOMALY_CONTOURS } from '../../services/temperatureAnomalyService';
+
 
 // Google Maps Style Teardrop Pin Marker
 const createGooglePinIcon = (color: string, label: string, isPulsing: boolean = false) => {
@@ -293,6 +299,106 @@ const GoogleMapOverlayControls: React.FC<{
   );
 };
 
+
+// Weather Station Marker (IMD MAUSAM / NDMA SACHET)
+const createWeatherStationIcon = (
+  tempC: number,
+  symbol: string,
+  alert: 'RED' | 'ORANGE' | 'YELLOW' | 'GREEN',
+  name: string
+) => {
+  const alertBg =
+    alert === 'RED'
+      ? '#DC2626'
+      : alert === 'ORANGE'
+        ? '#EA580C'
+        : alert === 'YELLOW'
+          ? '#EAB308'
+          : '#10B981';
+  return L.divIcon({
+    className: 'weather-station-marker',
+    html: `
+      <div style="position:relative; display:flex; flex-direction:column; align-items:center; cursor:pointer;">
+        <div style="display:flex; align-items:center; gap:3px; background:${alertBg}; color:#FFFFFF; font-family:system-ui, sans-serif; font-weight:800; font-size:10px; padding:2px 6px; border-radius:12px; border:1.5px solid #FFFFFF; box-shadow:0 2px 6px rgba(0,0,0,0.35); white-space:nowrap;">
+          <span>${symbol}</span>
+          <span>${tempC}°C</span>
+        </div>
+        <div style="background:rgba(15,23,42,0.85); color:#F8FAFC; font-family:system-ui, sans-serif; font-size:8.5px; font-weight:700; padding:1px 4px; border-radius:4px; margin-top:2px; white-space:nowrap; border:1px solid rgba(255,255,255,0.2);">
+          ${name}
+        </div>
+      </div>
+    `,
+    iconSize: [40, 36],
+    iconAnchor: [20, 18],
+    popupAnchor: [0, -18],
+  });
+};
+
+// Doppler Weather Radar Station Icon
+const createDWRIcon = (
+  name: string,
+  reflectivityDbz: number,
+  severity: string
+) => {
+  const color =
+    severity === 'extreme'
+      ? '#DC2626'
+      : severity === 'severe'
+        ? '#EA580C'
+        : severity === 'moderate'
+          ? '#F59E0B'
+          : '#10B981';
+  return L.divIcon({
+    className: 'dwr-station-marker',
+    html: `
+      <div style="position:relative; display:flex; flex-direction:column; align-items:center; cursor:pointer;">
+        <div style="width:34px; height:34px; border-radius:50%; background:${color}; border:2.5px solid #FFFFFF; box-shadow:0 0 12px ${color}; display:flex; align-items:center; justify-content:center; color:#FFFFFF; font-size:16px;">
+          📡
+        </div>
+        <div style="position:absolute; top:-18px; background:rgba(15,23,42,0.9); color:#FFFFFF; font-family:monospace; font-size:9px; font-weight:bold; padding:1px 5px; border-radius:4px; border:1px solid ${color}; white-space:nowrap;">
+          ${name}: ${reflectivityDbz} dBZ
+        </div>
+      </div>
+    `,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+    popupAnchor: [0, -17],
+  });
+};
+
+// Temperature Departure Anomaly Icon
+const createAnomalyMarkerIcon = (
+  anomalyC: number,
+  name: string
+) => {
+  const sign = anomalyC >= 0 ? '+' : '';
+  const isHeat = anomalyC >= 2;
+  const isCool = anomalyC <= -2;
+  const bgColor = isHeat
+    ? anomalyC >= 5
+      ? '#991B1B'
+      : '#DC2626'
+    : isCool
+      ? '#0284C7'
+      : '#10B981';
+  return L.divIcon({
+    className: 'temperature-anomaly-marker',
+    html: `
+      <div style="position:relative; display:flex; flex-direction:column; align-items:center; cursor:pointer;">
+        <div style="background:${bgColor}; color:#FFFFFF; font-family:monospace; font-weight:900; font-size:10px; padding:2px 6px; border-radius:12px; border:1.5px solid #FFFFFF; box-shadow:0 2px 6px rgba(0,0,0,0.35); white-space:nowrap;">
+          ${sign}${anomalyC}°C
+        </div>
+        <div style="background:rgba(15,23,42,0.85); color:#F8FAFC; font-family:system-ui, sans-serif; font-size:8px; font-weight:700; padding:1px 4px; border-radius:4px; margin-top:2px; white-space:nowrap;">
+          ${name}
+        </div>
+      </div>
+    `,
+    iconSize: [36, 32],
+    iconAnchor: [18, 16],
+    popupAnchor: [0, -16],
+  });
+};
+
 export interface MapLayersState {
   weatherRadar: boolean;
   isobarWinds: boolean;
@@ -482,14 +588,222 @@ export const IndiaSafetyMap: React.FC<IndiaSafetyMapProps> = ({
           maxZoom={tileConfig.maxZoom}
         />
 
+
+        {/* ========================================================================= */}
+        {/* DEDICATED DOPPLER RADAR MAP: ONLY active when layers.weatherRadar === true */}
+        {/* ========================================================================= */}
         {layers.weatherRadar && (
-          <TileLayer
-            url="https://tilecache.rainviewer.com/v2/radar/nowcast_0/256/{z}/{x}/{y}/2/1_1.png"
-            attribution="Radar &copy; RainViewer / IMD Doppler Network"
-            opacity={0.65}
-            maxZoom={18}
-          />
+          <>
+            {/* 1. Doppler Radar Station Range Rings and Radar Dishes */}
+            {IMD_DWR_STATIONS.map((station: DWRStation) => (
+              <React.Fragment key={station.id}>
+                {/* 250km Outer Scan Radius */}
+                <Circle
+                  center={station.coordinates}
+                  radius={station.rangeKm * 1000}
+                  pathOptions={{
+                    color: station.severity === 'extreme' ? '#DC2626' : '#0284C7',
+                    fillColor: station.severity === 'extreme' ? '#DC2626' : '#0284C7',
+                    fillOpacity: 0.08,
+                    weight: 1.5,
+                    dashArray: '6, 6',
+                  }}
+                />
+                {/* 100km Inner High-Reflectivity Ring */}
+                <Circle
+                  center={station.coordinates}
+                  radius={100000}
+                  pathOptions={{
+                    color: '#EA580C',
+                    fillColor: '#EA580C',
+                    fillOpacity: 0.12,
+                    weight: 2,
+                  }}
+                />
+                <Marker
+                  position={station.coordinates}
+                  icon={createDWRIcon(station.name.split(' ')[0], station.reflectivityDbz, station.severity)}
+                >
+                  <Popup>
+                    <div className="p-3 max-w-xs font-sans text-xs space-y-1.5">
+                      <div className="flex items-center justify-between border-b pb-1">
+                        <span className="font-bold text-slate-900 flex items-center gap-1">
+                          📡 {station.name}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-blue-100 text-blue-800">
+                          {station.band}
+                        </span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-[11px] space-y-1">
+                        <div>Max Reflectivity: <strong className="text-red-600">{station.reflectivityDbz} dBZ</strong></div>
+                        <div>Estimated Precipitation: <strong>{station.rainRateMmh} mm/h</strong></div>
+                        <div>Radial Doppler Velocity: <strong>{station.radialVelocityKmh} km/h</strong></div>
+                        <div>Storm Movement: <strong>{station.stormDirection} @ {station.stormSpeedKmh} km/h</strong></div>
+                        <div>Scan Cadence: <strong>{station.scanFrequency}</strong></div>
+                      </div>
+                      <p className="text-[10.5px] text-slate-600 leading-snug">
+                        {station.nowcastAlert}
+                      </p>
+                    </div>
+                  </Popup>
+                </Marker>
+              </React.Fragment>
+            ))}
+
+            {/* 2. Detected Radar Storm Cells */}
+            {IMD_STORM_CELLS.map((cell: RadarStormCell) => (
+              <Circle
+                key={cell.id}
+                center={cell.center}
+                radius={cell.radiusKm * 1000}
+                pathOptions={{
+                  color: cell.dbz >= 50 ? '#DC2626' : '#EA580C',
+                  fillColor: cell.dbz >= 50 ? '#DC2626' : '#EA580C',
+                  fillOpacity: 0.25,
+                  weight: 2,
+                }}
+              >
+                <Popup>
+                  <div className="p-2.5 max-w-xs font-sans text-xs space-y-1">
+                    <div className="font-bold text-red-700 flex items-center gap-1">
+                      ⚠️ Convective Storm Echo: {cell.dbz} dBZ
+                    </div>
+                    <div className="text-[11px]">{cell.rainfallCategory}</div>
+                    <p className="text-[10.5px] text-slate-600">{cell.nowcastWarning}</p>
+                  </div>
+                </Popup>
+              </Circle>
+            ))}
+          </>
         )}
+
+        {/* ========================================================================= */}
+        {/* DEDICATED WEATHER MAP: ONLY active when layers.weatherMap === true         */}
+        {/* ========================================================================= */}
+        {layers.weatherMap && (
+          <>
+            {RealtimeWeatherService.getAllDistrictWeatherNodes(0)
+              .filter((node: WeatherTelemetryNode) => {
+                if (!selectedStateName || selectedStateName === 'all') return true;
+                return node.stateName.toLowerCase().includes(selectedStateName.toLowerCase());
+              })
+              .map((node: WeatherTelemetryNode) => (
+                <Marker
+                  key={node.id}
+                  position={node.coordinates}
+                  icon={createWeatherStationIcon(node.tempC, node.symbol, node.sachetAlert, node.name)}
+                >
+                  <Popup>
+                    <div className="p-3 max-w-xs font-sans text-xs space-y-2">
+                      <div className="flex items-center justify-between border-b pb-1.5">
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-sm">{node.name}</h4>
+                          <span className="text-[10.5px] text-slate-500 font-medium">{node.stateName}</span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold ${
+                          node.sachetAlert === 'RED'
+                            ? 'bg-red-600 text-white animate-pulse'
+                            : node.sachetAlert === 'ORANGE'
+                              ? 'bg-orange-500 text-white'
+                              : node.sachetAlert === 'YELLOW'
+                                ? 'bg-yellow-400 text-black'
+                                : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {node.sachetAlert} ALERT
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">{node.symbol}</span>
+                        <div>
+                          <div className="text-sm font-bold text-slate-900">{node.tempC}°C</div>
+                          <div className="text-[10.5px] text-slate-600">{node.conditionLabel}</div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-200 text-[10.5px]">
+                        <div>Feels Like: <strong>{node.feelsLikeC}°C</strong></div>
+                        <div>Humidity: <strong>{node.humidityPercent}%</strong></div>
+                        <div>Wind: <strong>{node.windKmh} km/h ({node.windDirection})</strong></div>
+                        <div>Precipitation: <strong>{node.rainfallMm} mm</strong></div>
+                        <div>Pressure: <strong>{node.pressureHpa} hPa</strong></div>
+                        <div>AQI: <strong>{node.aqi}</strong></div>
+                      </div>
+
+                      <div className="p-2 rounded-lg bg-red-50 border border-red-200 text-[10px] text-red-900 font-medium">
+                        <strong>CAP Advisory:</strong> {node.capActionRequired}
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+          </>
+        )}
+
+        {/* ========================================================================= */}
+        {/* DEDICATED THERMAL ANOMALY MAP: ONLY active when layers.wildfireHotspots   */}
+        {/* ========================================================================= */}
+        {layers.wildfireHotspots && (
+          <>
+            {/* 1. Synoptic Temperature Departure Contour Polygons */}
+            {INDIA_TEMPERATURE_ANOMALY_CONTOURS.map((contour: AnomalyContourZone) => (
+              <Polygon
+                key={contour.id}
+                positions={contour.polygon}
+                pathOptions={{
+                  color: contour.color,
+                  fillColor: contour.fillColor,
+                  fillOpacity: contour.fillOpacity || 0.28,
+                  weight: 2,
+                  dashArray: contour.category.includes('heatwave') ? '4, 4' : undefined,
+                }}
+              >
+                <Popup>
+                  <div className="p-2.5 max-w-xs font-sans text-xs space-y-1">
+                    <div className="flex items-center justify-between border-b pb-1">
+                      <span className="font-bold text-slate-900">{contour.name}</span>
+                      <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-800">
+                        {contour.departureRange}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-700">Subdivision: <strong>{contour.subdivision}</strong></div>
+                    <p className="text-[10.5px] text-slate-600">{contour.synopticCause}</p>
+                    <div className="text-[10px] font-bold text-red-600">{contour.imdAlert}</div>
+                  </div>
+                </Popup>
+              </Polygon>
+            ))}
+
+            {/* 2. Temperature Departure Station Nodes */}
+            {TemperatureAnomalyService.getAllAnomalies().map((node: TemperatureAnomalyNode) => (
+              <Marker
+                key={node.id}
+                position={node.coordinates}
+                icon={createAnomalyMarkerIcon(node.anomalyC, node.name)}
+              >
+                <Popup>
+                  <div className="p-3 max-w-xs font-sans text-xs space-y-1.5">
+                    <div className="flex items-center justify-between border-b pb-1">
+                      <span className="font-bold text-slate-900">{node.name} ({node.state})</span>
+                      <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-slate-900 text-white">
+                        {node.anomalyC >= 0 ? `+${node.anomalyC}` : node.anomalyC}°C DEPARTURE
+                      </span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-[11px] space-y-1">
+                      <div>Observed Temp: <strong className="text-red-600">{node.recordedTempC}°C</strong></div>
+                      <div>Climatological Normal: <strong>{node.normalTempC}°C</strong></div>
+                      <div>Anomaly Category: <strong className="text-amber-700">{node.anomalyLabel}</strong></div>
+                      <div>Surface Sensor: <strong>{node.satelliteSensor}</strong></div>
+                    </div>
+                    <p className="text-[10.5px] text-slate-600 leading-snug">{node.description}</p>
+                    <div className="text-[10px] font-bold text-red-700">{node.alertTitle}</div>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+          </>
+        )}
+
 
         {/* ========================================================================= */}
         {/* DEDICATED WIND MAP: ONLY active when layers.isobarWinds === true          */}

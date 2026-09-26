@@ -1,4 +1,5 @@
 ﻿import React from 'react';
+import logoImg from '../../assets/logo.png';
 
 interface AegisLogoProps {
   className?: string;
@@ -14,7 +15,7 @@ export const AegisShieldIcon: React.FC<{ size?: number; className?: string }> = 
 }) => {
   return (
     <img
-      src="/logo.png"
+      src={logoImg}
       alt="AEGIS ALERT Logo"
       width={size}
       height={size}
