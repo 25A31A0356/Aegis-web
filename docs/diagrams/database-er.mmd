@@ -1,0 +1,78 @@
+erDiagram
+    USERS ||--o{ SOS_BEACONS : creates
+    USERS ||--o{ CITIZEN_REPORTS : files
+    USERS ||--o{ SAFE_CHECKINS : broadcasts
+    USERS ||--o{ EMERGENCY_CONTACTS : configures
+    
+    SOS_BEACONS ||--o{ DISPATCH_LOGS : generates
+    HAZARDS ||--o{ HAZARD_CORRELATIONS : participates
+    DISTRICTS ||--o{ WEATHER_TELEMETRY : records
+    
+    USERS {
+        uuid id PK
+        string phone
+        string name
+        string role
+        string blood_group
+        json medical_info
+        datetime created_at
+    }
+
+    SOS_BEACONS {
+        uuid id PK
+        uuid user_id FK
+        float latitude
+        float longitude
+        float accuracy_m
+        int battery_pct
+        int occupant_count
+        string severity
+        string status
+        datetime created_at
+    }
+
+    CITIZEN_REPORTS {
+        uuid id PK
+        uuid user_id FK
+        string hazard_type
+        string severity
+        string description
+        float latitude
+        float longitude
+        string media_url
+        string verification_status
+        datetime created_at
+    }
+
+    SAFE_CHECKINS {
+        uuid id PK
+        uuid user_id FK
+        string status
+        float latitude
+        float longitude
+        string message
+        datetime created_at
+    }
+
+    HAZARDS {
+        uuid id PK
+        string hazard_type
+        string category
+        string title
+        string severity
+        json geometry_geojson
+        float max_wind_kmh
+        float central_pressure_hpa
+        datetime effective_until
+    }
+
+    WEATHER_TELEMETRY {
+        uuid id PK
+        string district_name
+        string state_name
+        float temperature_c
+        float humidity_pct
+        float wind_speed_kmh
+        float temperature_anomaly_c
+        datetime recorded_at
+    }

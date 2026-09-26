@@ -1,0 +1,22 @@
+sequenceDiagram
+    autonumber
+    actor User as User / Operator
+    participant Client as Web / Mobile Client
+    participant AuthAPI as /api/v1/auth
+    participant Security as Security & JWT Core
+    participant DB as User Database
+
+    User->>Client: Enter Phone / Credentials
+    Client->>AuthAPI: POST /api/v1/auth/login (Credentials)
+    AuthAPI->>DB: Query User Record & Verify Hash (bcrypt)
+    DB-->>AuthAPI: User Profile & Role (CITIZEN / RESPONDER / ADMIN)
+    AuthAPI->>Security: Generate Access Token (JWT, HS256)
+    Security-->>AuthAPI: Signed Token + Expiry Timestamp
+    AuthAPI-->>Client: HTTP 200 {access_token, token_type, user_profile}
+    Client->>Client: Secure Token Storage (SecureStore / LocalStorage)
+    
+    Note over Client,AuthAPI: Subsequent Authenticated Requests
+    Client->>AuthAPI: Request with Header Authorization: Bearer <token>
+    AuthAPI->>Security: Validate Signature & Claims
+    Security-->>AuthAPI: Validated Identity & Role
+    AuthAPI-->>Client: Authorized Resource Response

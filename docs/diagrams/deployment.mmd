@@ -1,0 +1,32 @@
+flowchart TD
+    subgraph Clients [Client Layer]
+        Mobile[Mobile Devices: Android / iOS - Expo]
+        Browser[Desktop / Mobile Browsers]
+    end
+
+    subgraph Edge [Edge & CDN Layer]
+        Cloudflare[Cloudflare CDN & DDoS Protection / SSL]
+    end
+
+    subgraph Compute [Containerized Application Tier]
+        Nginx[Nginx Reverse Proxy & Static Host]
+        FastAPI_Instance1[FastAPI Worker 1 - Uvicorn]
+        FastAPI_Instance2[FastAPI Worker 2 - Uvicorn]
+    end
+
+    subgraph DataTier [State & Persistence Tier]
+        PostgreSQL[(PostgreSQL 16 Database)]
+        Redis[(Redis In-Memory Cache & WS Broker)]
+    end
+
+    Browser --> Cloudflare
+    Mobile --> Cloudflare
+    Cloudflare --> Nginx
+    Nginx -->|/ (Static Assets)| Nginx
+    Nginx -->|/api/* & /ws| FastAPI_Instance1
+    Nginx -->|/api/* & /ws| FastAPI_Instance2
+
+    FastAPI_Instance1 --> PostgreSQL
+    FastAPI_Instance2 --> PostgreSQL
+    FastAPI_Instance1 --> Redis
+    FastAPI_Instance2 --> Redis

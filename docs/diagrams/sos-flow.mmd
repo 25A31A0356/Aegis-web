@@ -1,0 +1,31 @@
+sequenceDiagram
+    autonumber
+    actor Victim as Citizen in Distress
+    participant App as AEGIS Mobile App
+    participant Queue as Offline Queue (AsyncStorage)
+    participant Gateway as FastAPI Gateway
+    participant Triage as SOS Triage Engine
+    participant DB as PostgreSQL Database
+    participant WS as WebSocket Hub
+    actor Responder as Emergency Responder / SEOC
+
+    Victim->>App: Triggers Emergency SOS Button
+    App->>App: Captures GPS (Lat, Lng, Accuracy, Alt)
+    App->>App: Collects Device Telemetry (Battery %, Signal, Headcount)
+    alt Network Available
+        App->>Gateway: POST /api/v1/sos (SOS Payload)
+    else Network Offline
+        App->>Queue: Enqueue SOS Beacon (Encrypted Payload)
+        Note over App,Queue: Automatic retry on connectivity restoration
+        Queue->>Gateway: POST /api/v1/sos (On Reconnect)
+    end
+
+    Gateway->>Triage: Process SOS Beacon & Compute Priority
+    Triage->>DB: Persist SOS Record & Incident State
+    Triage->>WS: Broadcast SOS Alert to Active Operations Room
+    WS-->>Responder: Real-time Radar Pulse & Acoustic Beacon
+    Responder->>Gateway: GET /api/v1/sos/{id}/profile
+    Gateway-->>Responder: Full Victim Telemetry & Contact Speed-Dial
+    Responder->>Gateway: POST /api/v1/sos/{id}/dispatch (Assign Units)
+    Gateway->>DB: Update Status: IN_TRANSIT / RESOLVED
+    Gateway-->>App: Confirmation & ETA Telemetry

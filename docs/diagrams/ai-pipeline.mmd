@@ -1,0 +1,41 @@
+flowchart TD
+    subgraph DataIngestion [Telemetry Ingestion]
+        Atmosphere[Temperature, Wind, Pressure, Humidity]
+        Radar[Doppler Radar dBZ Reflectivity]
+        ActiveEvents[Active Cyclone Eye & Hazard Polygons]
+        CitizenData[Aggregated Incident Reports]
+    end
+
+    subgraph Preprocessing [Data Preprocessing & Normalization]
+        GeoSpatialIndexing[Subdivision Polygon Clipping]
+        SynopticHarmonization[2-Hour Time-Step Normalization]
+        AnomalyDetection[Temperature & Gale Anomaly Scoring]
+    end
+
+    subgraph IntelligenceEngine [AI Risk Sentinel Engine]
+        RuleEvaluator[NDMA Standard Threat Threshold Evaluator]
+        ContextSynthesizer[Contextual Multi-Hazard Risk Scoring (0-100)]
+        AdvisoryGenerator[Safety Directive & Evacuation Strategy Synthesizer]
+    end
+
+    subgraph Delivery [Disaster Intelligence Delivery]
+        MobileAlert[Push Notification & Risk Score Meter]
+        WebGIS[Color-Coded Hazard Corridors & Action Advisories]
+        AskAIResponse[Contextual Natural Language Q&A]
+    end
+
+    Atmosphere --> GeoSpatialIndexing
+    Radar --> GeoSpatialIndexing
+    ActiveEvents --> SynopticHarmonization
+    CitizenData --> AnomalyDetection
+
+    GeoSpatialIndexing --> RuleEvaluator
+    SynopticHarmonization --> ContextSynthesizer
+    AnomalyDetection --> ContextSynthesizer
+
+    RuleEvaluator --> AdvisoryGenerator
+    ContextSynthesizer --> AdvisoryGenerator
+
+    AdvisoryGenerator --> MobileAlert
+    AdvisoryGenerator --> WebGIS
+    AdvisoryGenerator --> AskAIResponse

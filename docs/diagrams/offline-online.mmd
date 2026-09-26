@@ -1,0 +1,29 @@
+stateDiagram-v2
+    [*] --> OnlineState : App Startup (Network OK)
+    
+    state OnlineState {
+        [*] --> FetchingTelemetry
+        FetchingTelemetry --> LiveSynced : 2h Synoptic & SOS Synced
+        LiveSynced --> DirectDispatch : SOS/Report Instant Post
+    }
+
+    OnlineState --> NetworkLoss : Disconnect / Low Signal
+    
+    state OfflineState {
+        [*] --> CacheServing : Serve Cached Maps & SOP Guides
+        CacheServing --> QueueLocally : User Submits SOS / Report
+        QueueLocally --> EncryptedQueue : Save to SQLite/AsyncStorage
+        EncryptedQueue --> WaitConnectivity : Poll Network State
+    }
+
+    NetworkLoss --> OfflineState
+    OfflineState --> NetworkRestored : Reconnect Detected
+    
+    state SyncingState {
+        [*] --> BatchFlushing : Dequeue Pending SOS/Reports
+        BatchFlushing --> ConflictResolution : Verify Nonce & Timestamp
+        ConflictResolution --> SyncSuccess : Push to Gateway
+    }
+
+    NetworkRestored --> SyncingState
+    SyncingState --> OnlineState : Queue Emptied

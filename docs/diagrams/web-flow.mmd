@@ -1,0 +1,24 @@
+flowchart TD
+    WebAccess[Access Web Dashboard] --> Dashboard[Live Situation Command Center /]
+    
+    Dashboard --> ResearchMaps[Research Maps /maps/research]
+    Dashboard --> SOSMaps[Dedicated SOS Maps /maps]
+    Dashboard --> SafetyHub[NDMA Safety Hub /safety]
+    Dashboard --> Hazards[Hazard Matrix /hazards]
+    Dashboard --> Forecasts[Atmospheric Matrix & Timeline /forecasts]
+    Dashboard --> Reports[Citizen Reports Triage /reports]
+    Dashboard --> SOSConsole[SOS Beacon Dispatch Desk /sos]
+    
+    subgraph SevenMaps [7 Clean Meteorological Layers]
+        CycloneMap[cyclone maps: Storm ARNAB Track & Radii]
+        WindMap[wind maps: Streamline Vector Fields]
+        WeatherMap[weather maps: State & District Telemetry]
+        DopplerMap[doppler maps: DWR Radar Reflectivity]
+        SatMap[satellite maps: Multispectral Imaging]
+        ThermalMap[thermal anomaly maps: Isothermal Contours]
+        StreetMap[street maps: High-contrast Navigation]
+    end
+    
+    ResearchMaps --> SevenMaps
+    SOSMaps --> VictimProfile[Victim Profile Modal + Speed-Dial Dispatch]
+    SafetyHub --> HazardModal[7 Hazard Action Protocols + Video SOPs]

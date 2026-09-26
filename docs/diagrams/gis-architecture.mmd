@@ -1,0 +1,34 @@
+flowchart TD
+    subgraph Sensors [Input Geospatial Telemetry]
+        GPS[Device GNSS / GPS Receiver]
+        IMD_Bulletins[IMD RSMC Cyclone Track Points]
+        NOAA_Grids[NOAA CPC Temperature Departure Grids]
+        DWR_Tiles[Doppler Radar Composite Tiles]
+    end
+
+    subgraph GISProcessing [AEGIS Geospatial Processing Pipeline]
+        HaversineCalc[Haversine Geodesic Distance Engine]
+        TrackInterpolation[Catmull-Rom Track Spline Generator]
+        ConeBuilder[Forecast Cone of Uncertainty Polygon Builder]
+        ContourBuilder[Continuous Isothermal Departure Polygon Engine]
+    end
+
+    subgraph MapLayers [Leaflet GIS Layer Hierarchy]
+        BaseLayer[Base Layer: OpenStreetMap / CartoDB Dark]
+        CycloneLayer[Active Cyclone ARNAB Track & 210km Gale Radii]
+        WindVectorLayer[Atmospheric Wind Streamlines & Anemometers]
+        DopplerLayer[Radar Reflectivity Overlay (dBZ)]
+        ThermalLayer[Synoptic Temperature Departure Polygons]
+        SOSLayer[Dedicated SOS Radar Pulse Beacons]
+    end
+
+    GPS --> HaversineCalc
+    IMD_Bulletins --> TrackInterpolation
+    IMD_Bulletins --> ConeBuilder
+    NOAA_Grids --> ContourBuilder
+
+    TrackInterpolation --> CycloneLayer
+    ConeBuilder --> CycloneLayer
+    ContourBuilder --> ThermalLayer
+    DWR_Tiles --> DopplerLayer
+    HaversineCalc --> SOSLayer

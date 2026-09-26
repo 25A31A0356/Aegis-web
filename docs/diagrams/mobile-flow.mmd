@@ -1,0 +1,19 @@
+flowchart TD
+    Launch[App Launch & Permission Check] --> CheckGPS[GPS Accuracy & Location Detection]
+    CheckGPS --> Home[Home Dashboard / Main Telemetry]
+    
+    Home -->|Tab 1: Home| DynamicTelemetry[Live Weather & 2h Synoptic Countdown]
+    Home -->|Tab 2: Guides| HazardSOPs[NDMA SACHET Action Guides & Do's/Don'ts]
+    Home -->|Tab 3: Reports| IncidentReport[Submit Incident Report + Media + GPS]
+    Home -->|Tab 4: Safe| SafeCheckIn[Safe Check-in & Family Status Broadcast]
+    Home -->|Tab 5: Ask AI| DisasterAI[Contextual Emergency Q&A Sentinel]
+    
+    Home -->|Top Action| SOSBeacon[Emergency SOS Beacon Dispatch]
+    SOSBeacon --> CheckNetwork{Network Status?}
+    CheckNetwork -->|Online| DispatchLive[Immediate WebSocket/REST Dispatch]
+    CheckNetwork -->|Offline| QueueLocal[Store in Offline Queue + Retry Engine]
+    QueueLocal -->|On Reconnect| DispatchLive
+    
+    Home -->|Nav Action| TacticalMap[Live Real-time GIS & Evacuation Routes]
+    Home -->|Nav Action| HazardDirectory[All Hazards Directory & State Filters]
+    Home -->|Nav Action| GPSDiagnostics[GPS Precision & Sat Telemetry Monitor]

@@ -1,0 +1,65 @@
+flowchart TD
+    subgraph Users [Users & Field Operators]
+        Citizen[Citizen / Public User]
+        Victim[Victim in Distress]
+        Responder[NDRF / SDRF First Responder]
+        Authority[SEOC / DEOC Administrator]
+    end
+
+    subgraph ClientLayer [Client Applications]
+        MobileApp[AEGIS Mobile App - React Native / Expo]
+        WebDashboard[AEGIS Web GIS Dashboard - React 19 / Leaflet]
+    end
+
+    subgraph APILayer [API Gateway & Ingestion Layer]
+        FastAPI[FastAPI Gateway - Port 8000]
+        WS[WebSocket Real-Time Dispatch /ws]
+        TRPC[tRPC Compatibility Layer]
+    end
+
+    subgraph CoreEngine [Core Intelligence & Business Logic]
+        SynopticEngine[2-Hour Synoptic Met Engine]
+        CycloneTracker[IMD Cyclone Spline & Gale Radii Engine]
+        SOSTriage[SOS Triage & Haversine Distance Engine]
+        AIDisasterSentinel[Context-Aware Disaster AI Sentinel]
+        HazardCorrelation[Multi-Hazard Correlation Engine]
+    end
+
+    subgraph DataStorage [Persistence & Cache]
+        Postgres[(PostgreSQL 16 + PostGIS / SQLite)]
+        RedisCache[(Redis Cache & Pub/Sub)]
+    end
+
+    subgraph ExternalFeeds [Authoritative Meteorological & Hazard Feeds]
+        IMD[IMD RSMC Cyclone & Doppler Radar]
+        ISRO[ISRO MOSDAC Satellite Rasters]
+        NOAA[NOAA CPC Temperature Departure Grids]
+        NDMA[NDMA SACHET Disaster Feeds]
+        CWC[CWC River Basin Flood Feeds]
+    end
+
+    Citizen --> MobileApp
+    Victim --> MobileApp
+    Responder --> MobileApp
+    Authority --> WebDashboard
+
+    MobileApp -->|HTTP/REST & tRPC| FastAPI
+    MobileApp -->|Live Telemetry| WS
+    WebDashboard -->|REST API| FastAPI
+    WebDashboard -->|Event Stream| WS
+
+    FastAPI --> TRPC
+    FastAPI --> SynopticEngine
+    FastAPI --> CycloneTracker
+    FastAPI --> SOSTriage
+    FastAPI --> AIDisasterSentinel
+    FastAPI --> HazardCorrelation
+
+    SynopticEngine --> Postgres
+    CycloneTracker --> Postgres
+    SOSTriage --> Postgres
+    HazardCorrelation --> Postgres
+    FastAPI --> RedisCache
+
+    ExternalFeeds --> SynopticEngine
+    ExternalFeeds --> HazardCorrelation
